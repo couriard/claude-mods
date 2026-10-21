@@ -1,4 +1,4 @@
-// Skills panel: the skills and connectors of the session's project in one panel, each with
+// Skill Switchboard: the skills and connectors of the session's project in one panel, each with
 // a switch, and a search of a skills library (a folder on this computer, or on a server reached
 // over ssh) with a switch that copies a skill in from it.
 //
@@ -14,8 +14,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Connector, Installed, VaultEntry, View } from '../types'
 
-const PANE = 'skills-panel'
-const COMMAND = 'skills-panel'
+const PANE = 'skill-switchboard'
+const COMMAND = 'skill-switchboard'
 
 // Where the skills library is: the person's own settings, read when the module loads (see register).
 // `path` empty means no library is set up, and the panel says how to set one.
@@ -36,13 +36,13 @@ async function localPath($: EngineInterface, p: string): Promise<string> {
   return p === '~' || p.startsWith('~/') ? `${(await $.env.get('HOME')) ?? ''}${p.slice(1)}` : p
 }
 
-const installed = atom({ plugin: 'skills-panel', key: 'installed' } as const, [])
-const vault = atom({ plugin: 'skills-panel', key: 'vault' } as const, null)
-const faulted = atom({ plugin: 'skills-panel', key: 'faulted' } as const, [])
-const connectors = atom({ plugin: 'skills-panel', key: 'connectors' } as const, null)
+const installed = atom({ plugin: 'skill-switchboard', key: 'installed' } as const, [])
+const vault = atom({ plugin: 'skill-switchboard', key: 'vault' } as const, null)
+const faulted = atom({ plugin: 'skill-switchboard', key: 'faulted' } as const, [])
+const connectors = atom({ plugin: 'skill-switchboard', key: 'connectors' } as const, null)
 // Servers switched off for this session by the panel itself (those the app's switch cannot reach).
-const hiddenServers = atom({ plugin: 'skills-panel', key: 'hidden' } as const, [])
-const view = atom({ plugin: 'skills-panel', key: 'view' } as const, { tab: 'skills', showActive: true, query: '', busy: '', note: '' })
+const hiddenServers = atom({ plugin: 'skill-switchboard', key: 'hidden' } as const, [])
+const view = atom({ plugin: 'skill-switchboard', key: 'view' } as const, { tab: 'skills', showActive: true, query: '', busy: '', note: '' })
 
 // A skill's name: lower case letters, digits and hyphens, nothing that could be a path.
 const NAME = /^[a-z0-9][a-z0-9-]*$/
@@ -494,7 +494,7 @@ const statusWords = (c: Connector): string =>
 
 async function openPane($: EngineInterface): Promise<void> {
   await refresh($)
-  await $.ui.open({ id: PANE, title: 'Skills Panel', focus: true })
+  await $.ui.open({ id: PANE, title: 'Skill Switchboard', focus: true })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -517,7 +517,7 @@ const CARDS_MAX = 40
 // buttons and drawings there; the reason goes to the session's debug log.
 async function noteFault($: EngineInterface, surface: string, reason: string): Promise<void> {
   await update($, faulted, list => (list.includes(surface) ? list : [...list, surface]))
-  $.ui.log(`skills-panel: the ${surface} could not draw the panel's own pieces (${reason}); using the app's own instead`, { to: 'debug' })
+  $.ui.log(`skill-switchboard: the ${surface} could not draw the panel's own pieces (${reason}); using the app's own instead`, { to: 'debug' })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -591,7 +591,7 @@ type CardRow = { name: string; version: string; description: string; tag: string
 // Shown where the library's rows would be, until a library is set up: how to set one.
 const NOT_SET_UP =
   'No skills library is set up. To list skills you have not installed yet, point the panel at a folder of skills: ' +
-  'in a terminal, type /config, find skills-panel and set Library Folder (and Library Server if the folder is on another computer, reached over ssh).'
+  'in a terminal, type /config, find skill-switchboard and set Library Folder (and Library Server if the folder is on another computer, reached over ssh).'
 
 const clean = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v.trim() : fallback)
 
@@ -620,19 +620,19 @@ export const register: Register = (on, options) => {
   })
   on('tool.check', async ($, e, next) => {
     const server = serverOfTool(e.tool, await read($, hiddenServers))
-    if (server) return { decision: 'deny', reason: `${server} is switched off for this session in the Skills Panel` }
+    if (server) return { decision: 'deny', reason: `${server} is switched off for this session in the Skill Switchboard` }
     return next(e)
   })
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    await $.command.register({ name: COMMAND, description: 'Open the Skills Panel: your skills and connectors, each with a switch' })
+    await $.command.register({ name: COMMAND, description: 'Open the Skill Switchboard: your skills and connectors, each with a switch' })
     return started
   })
 
   on('command.run', { command: COMMAND }, async $ => {
     await openPane($)
-    return { text: 'Skills Panel opened.' }
+    return { text: 'Skill Switchboard opened.' }
   })
 
   // A surface that could not draw one of the panel's own pieces: note it, so the next drawing on

@@ -7,8 +7,8 @@
   },
   "plugins": [
     {
-      "name": "skills-panel",
-      "source": "./plugins/skills-panel",
+      "name": "skill-switchboard",
+      "source": "./plugins/skill-switchboard",
       "description": "One panel for your skills and connectors, each with a switch, a search, and a one-click install from your own skills library."
     },
     {

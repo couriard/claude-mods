@@ -50,7 +50,7 @@ export type View = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'skills-panel': {
+    'skill-switchboard': {
       installed: Installed[]
       vault: VaultEntry[] | null
       view: View

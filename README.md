@@ -4,24 +4,24 @@ Mods for [Claude Code](https://code.claude.com): small additions to its own inte
 
 **The mods**
 
-- [Skills Panel](#skills-panel): your skills and connectors in one panel, each with a switch.
+- [Skill Switchboard](#skill-switchboard): your skills and connectors in one panel, each with a switch.
 - [Fun Savvy Progress](#fun-savvy-progress): a live panel of your sub-agents, with a progress bar above the prompt.
 
 [How installing works](#how-installing-works) · [Requirements](#requirements) · [Licence](#licence)
 
 ---
 
-## Skills Panel
+## Skill Switchboard
 
-One panel for your skills and connectors, each with a switch, a search, and a one-click install from your own skills library. Open it with `/skills-panel`.
+One panel for your skills and connectors, each with a switch, a search, and a one-click install from your own skills library. Open it with `/skill-switchboard`.
 
-<img src="plugins/skills-panel/docs/skills.png" alt="The Skills Panel: the Skills tab with three skills, each with a Switch Off link" width="360">
+<img src="plugins/skill-switchboard/docs/skills.png" alt="The Skill Switchboard: the Skills tab with three skills, each with a Switch Off link" width="360">
 
 ```
-/plugin install skills-panel --marketplace couriard/claude-mods
+/plugin install skill-switchboard --marketplace couriard/claude-mods
 ```
 
-**[Full guide: what it shows, its settings, and how its switches work →](plugins/skills-panel)**
+**[Full guide: what it shows, its settings, and how its switches work →](plugins/skill-switchboard)**
 
 ---
 
@@ -44,7 +44,7 @@ A live panel of your sub-agents, each with its name, model, the skills it used a
 This repository is a plugin marketplace: the first install adds it, and every mod after that installs from it.
 
 - **In a terminal session of Claude Code**, type the mod's install line (under each mod above) at the prompt. Answer `y` to add the marketplace, pick a scope (your user scope makes it work in every project), and fill in the mod's settings when asked. Every setting can be left empty or at its default, and changed later with `/config`.
-- **From a shell**, put `claude` in front of the same line without the slash, for example `claude plugin install skills-panel --marketplace couriard/claude-mods`.
+- **From a shell**, put `claude` in front of the same line without the slash, for example `claude plugin install skill-switchboard --marketplace couriard/claude-mods`.
 - **In the Claude desktop app**, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace**, enter `couriard/claude-mods`, then **Add plugin** and pick the mod.
 
 ## Requirements

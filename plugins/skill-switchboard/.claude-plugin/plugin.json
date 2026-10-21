@@ -1,12 +1,12 @@
 {
-  "name": "skills-panel",
+  "name": "skill-switchboard",
   "version": "1.0.0",
-  "description": "A Claude Code panel for your skills and connectors: Skills and Connectors tabs, a search, an Active Only filter, and a switch on every row. Point it at a skills library (a folder here, or on a server over ssh) to install skills from it with one click.",
+  "description": "Skill Switchboard: a Claude Code panel for your skills and connectors: Skills and Connectors tabs, a search, an Active Only filter, and a switch on every row. Point it at a skills library (a folder here, or on a server over ssh) to install skills from it with one click.",
   "author": {
     "name": "couriard",
     "url": "https://github.com/couriard"
   },
-  "homepage": "https://github.com/couriard/claude-mods/tree/main/plugins/skills-panel",
+  "homepage": "https://github.com/couriard/claude-mods/tree/main/plugins/skill-switchboard",
   "repository": "https://github.com/couriard/claude-mods",
   "license": "MIT",
   "keywords": [

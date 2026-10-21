@@ -91,8 +91,8 @@ for (const surface of ['terminal'] as const) {
     const ran: string[][] = []
     engine(on, files, ran)
 
-    await $.command.run({ command: 'skills-panel', args: '' } as never)
-    const pane = await $.ui.mount({ plugin: 'skills-panel', surface, component: 'Pane', requestId: 'skills-panel', props: { bodyColumns: 70, title: 'Skills Panel' } } as never)
+    await $.command.run({ command: 'skill-switchboard', args: '' } as never)
+    const pane = await $.ui.mount({ plugin: 'skill-switchboard', surface, component: 'Pane', requestId: 'skill-switchboard', props: { bodyColumns: 70, title: 'Skill Switchboard' } } as never)
     const card = (name: string) => pane.find({ key: `card-${name}` })
     const flip = async (name: string) => {
       await pane.resize({ in: `card-${name}`, columns: CARD_W, rows: CARD_H } as never)
@@ -200,8 +200,8 @@ test('the desktop: Skills | Connectors buttons, Active Only, drawn rows with a s
   const files = seed()
   const ran: string[][] = []
   engine(on, files, ran)
-  await $.command.run({ command: 'skills-panel', args: '' } as never)
-  const pane = await $.ui.mount({ plugin: 'skills-panel', surface: 'desktop', component: 'Pane', requestId: 'skills-panel', props: { bodyColumns: 70, title: 'Skills Panel' } } as never)
+  await $.command.run({ command: 'skill-switchboard', args: '' } as never)
+  const pane = await $.ui.mount({ plugin: 'skill-switchboard', surface: 'desktop', component: 'Pane', requestId: 'skill-switchboard', props: { bodyColumns: 70, title: 'Skill Switchboard' } } as never)
   const svgsValid = async () => {
     for (const el of await pane.findAll({ type: 'Svg' })) expect({ alt: el.props.alt, faults: checkSvg(String(el.props.source)) }).toEqual({ alt: el.props.alt, faults: [] })
   }
@@ -277,8 +277,8 @@ test('the Connectors tab switches a connector for the session and records how to
   })
   on('session.id', async () => ({ value: 'session-1' }) as never)
   on('tool.check', async () => ({ decision: 'allow' }) as never)
-  await $.command.run({ command: 'skills-panel', args: '' } as never)
-  const pane = await $.ui.mount({ plugin: 'skills-panel', surface: 'desktop', component: 'Pane', requestId: 'skills-panel', props: { bodyColumns: 70, title: 'Skills Panel' } } as never)
+  await $.command.run({ command: 'skill-switchboard', args: '' } as never)
+  const pane = await $.ui.mount({ plugin: 'skill-switchboard', surface: 'desktop', component: 'Pane', requestId: 'skill-switchboard', props: { bodyColumns: 70, title: 'Skill Switchboard' } } as never)
   await pane.press({ key: 'tab-connectors' })
 
   // Active Only ticked: the connected ones; the desktop extension has no switch.
@@ -326,8 +326,8 @@ test('without a library: installed skills only, and a note saying how to set one
   const files = seed()
   const ran: string[][] = []
   engine(on, files, ran)
-  await $.command.run({ command: 'skills-panel', args: '' } as never)
-  const pane = await $.ui.mount({ plugin: 'skills-panel', surface: 'desktop', component: 'Pane', requestId: 'skills-panel', props: { bodyColumns: 70, title: 'Skills Panel' } } as never)
+  await $.command.run({ command: 'skill-switchboard', args: '' } as never)
+  const pane = await $.ui.mount({ plugin: 'skill-switchboard', surface: 'desktop', component: 'Pane', requestId: 'skill-switchboard', props: { bodyColumns: 70, title: 'Skill Switchboard' } } as never)
   expect(await pane.find({ key: 'card-plan-interview' })).toBeDefined()
   expect(await pane.find({ key: 'refresh-vault' })).toBeUndefined()
   await pane.press({ key: 'show-active-fallback' })

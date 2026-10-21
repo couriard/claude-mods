@@ -1,8 +1,8 @@
-# Skills Panel
+# Skill Switchboard
 
 A Claude Code panel for your **skills** and **connectors**. Every row has a switch, a search narrows the list as you type, and an **Active Only** tick box flips between what is on and what is not. Point it at your own skills library and it installs a skill from there with one click.
 
-Open it with `/skills-panel`. (Claude Code keeps `/skills` for its own Settings page.)
+Open it with `/skill-switchboard`.
 
 ![The Skills tab: three skills, each with its version, description and a Switch Off link](docs/skills.png)
 
@@ -11,7 +11,7 @@ Open it with `/skills-panel`. (Claude Code keeps `/skills` for its own Settings 
 At the prompt of a terminal session of Claude Code:
 
 ```
-/plugin install skills-panel --marketplace couriard/claude-mods
+/plugin install skill-switchboard --marketplace couriard/claude-mods
 ```
 
 Answer `y` to add the marketplace, pick a scope, and fill in the settings below when asked (all can be left empty). In the Claude desktop app: **+** next to the prompt box → **Plugins** → **Add marketplace** → `couriard/claude-mods` → **Add plugin**.
@@ -36,7 +36,7 @@ The app's switch also becomes the default for new sessions, so the panel records
 
 ## Settings
 
-Claude Code asks for these when you install. All can be left empty and changed later with `/config` → **skills-panel**.
+Claude Code asks for these when you install. All can be left empty and changed later with `/config` → **skill-switchboard**.
 
 | Setting | What to put | Example |
 |---|---|---|
