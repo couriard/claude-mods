@@ -21,7 +21,7 @@ Answer `y` to add the marketplace, pick a scope, and fill in the settings below 
 ## What it shows
 
 - **Totals**: cost, tokens and time across the session's sub-agents.
-- **Running and Finished sub-agents**: each headed by what it is working on, then its name, model and effort, and the skills it used ("None" when it used none), with a progress bar. Gates (checking sub-agents) say which kind of gate they are.
+- **Running and Finished sub-agents**: each headed by what it is working on, then the same three lines on every one, **Name**, **Model** (with effort) and **Skills** ("None" when it used none), and a progress bar. Names are ordinary first names: a sub-agent whose description starts with one keeps it, and any other is given one (Ada, Ben, Cleo…), steady for it and never shared with another running at the same time. Gates (checking sub-agents) say which kind of gate they are in their heading.
 - **Skills and health**: the skills the session used, and the run's health when an orchestrator reports it.
 - **The progress bar above the prompt**, once a workflow reports a round (see below): its name, phase and progress, a **Gates** counter (✓ passed, ✗ failed, ◷ running) and the crew size, which opens the panel.
 
@@ -42,7 +42,7 @@ All can be changed later with `/config` → **fun-savvy-progress**.
 
 The panel watches sub-agents start, work and finish on its own; nothing is required. A workflow can add to it:
 
-- **Sub-agent descriptions**: a description written `Crew A — what it does` shows "Crew A" as the sub-agent's name and "What It Does" as its heading. One with the word "gate" in it is shown as a gate.
+- **Sub-agent descriptions**: a description written `Ada — what it does` shows "Ada" as the sub-agent's name and "What It Does" as its heading. One with the word "gate" in it is shown as a gate.
 - **Gate verdicts**: a gate's final report can carry `GATE-RECORD: {"task": "<what it checked>", "gate": "<gate name>", "verdict": "pass|fail|not applicable"}` lines, which feed the Gates counter.
 - **The `progress` tool** (`mcp__fun-savvy-progress__progress`): an orchestrator reports a round (a `title`, a `phaseLabel` such as Building, and `total` and `done`) and the progress bar appears above the prompt. Fields left out keep their last value; `finished: true` closes the round.
 - **The `step` tool** (`mcp__fun-savvy-progress__step`): a sub-agent reports its own steps (`done`, `total`, `note`). Without it, a sub-agent's bar moves with the calls it makes.

@@ -64,7 +64,7 @@ test('a reported round heads each sub-agent with its task, and the gates counter
       {
         title: 'checkout page: the total updates when the basket changes',
         id: 'TASK-41',
-        crew: 'Crew A',
+        crew: 'Ada',
         gates: ['gate-style', 'gate-record'],
         status: 'building',
       },
@@ -72,7 +72,7 @@ test('a reported round heads each sub-agent with its task, and the gates counter
     skills: ['task-runner'],
     health: { heartbeat: true, watchdog: true, slots: '1 of 2' },
   } as never)
-  await $.agent.spawn({ tool_use_id: 't-crew', prompt: 'work TASK-41 in the shop', description: 'Crew A — basket total', subagentType: 'claude', provider: 'user' } as never)
+  await $.agent.spawn({ tool_use_id: 't-crew', prompt: 'work TASK-41 in the shop', description: 'Ada — basket total', subagentType: 'claude', provider: 'user' } as never)
   // The crew's skills: one called, one read from its folder.
   await $.tool.call({ tool: 'Skill', skill: 'frontend-design', agentId: 'crew-1' } as never)
   await $.tool.call({ tool: 'Read', file_path: '/home/someone/.claude/skills/brand-voice/SKILL.md', agentId: 'crew-1' } as never)
@@ -115,13 +115,16 @@ test('a reported round heads each sub-agent with its task, and the gates counter
   // No Tasks list: the round's tasks head the sub-agents that work them instead.
   expect(await pane.find({ key: 'task-TASK-41' })).toBeUndefined()
   const crewRow = JSON.stringify(await pane.find({ key: 'crew-1' }))
+  expect(crewRow).not.toContain('Task:')
+  expect(crewRow).toContain('Name: Ada')
   expect(crewRow).toContain('Model: Opus 5.5')
-  expect(crewRow).toContain('Task: TASK-41')
   expect(crewRow).toContain('Skills: Frontend Design, Brand Voice')
   const gateRow = JSON.stringify(await pane.find({ key: 'gate-2' }))
   expect(gateRow).toContain('Style Gate: Checkout Page: the Total Updates When the Basket Changes')
-  expect(gateRow).toContain('Gate: Style')
-  expect(gateRow).not.toContain('Name: Style')
+  // Every row reads Name, Model, Skills, gates included; the gate's kind is in its heading only.
+  expect(gateRow).toMatch(/Name: [A-Z][a-z]+/)
+  expect(gateRow).not.toContain('Gate: Style')
+  expect(gateRow).toContain('Model: Sonnet 5')
   expect(gateRow).toContain('Skills: None')
   expect(JSON.stringify(await pane.find({ key: 'chip-0' }))).toContain('Skills: Task Runner')
   // Costs in US dollars by default.
@@ -154,8 +157,27 @@ test('a gate named "Gate: design system check" reads Design System Gate, never G
   } as never)
   const row = JSON.stringify(await pane.find({ key: 'gate-3' }))
   expect(row).toContain('Design System Gate: Toolbar Spacing')
-  expect(row).toContain('Gate: Design System')
+  expect(row).toMatch(/Name: [A-Z][a-z]+/)
   expect(row).not.toContain('Gate Gate')
   expect(row).not.toContain('Gate: Gate')
+  await pane.unmount()
+})
+
+// A sub-agent whose description does not start with a first name is given one, and two running
+// sub-agents never share one.
+test('sub-agents without a first name are given one, never twice at once', async ($, on) => {
+  engine(on)
+  let n = 0
+  on('agent.spawn', async () => ({ model: 'claude-opus-5-5', agentId: `run-${++n}` }))
+  await $.agent.spawn({ tool_use_id: 'x1', prompt: 'look', description: 'Explore — the repo layout', subagentType: 'Explore', provider: 'user' } as never)
+  await $.agent.spawn({ tool_use_id: 'x2', prompt: 'look', description: 'Crew A — the same thing', subagentType: 'claude', provider: 'user' } as never)
+  const pane = await $.ui.mount({ plugin: 'fun-savvy-progress', surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: { bodyColumns: 120, title: 'Agents' } } as never)
+  const one = /Name: ([A-Za-z]+)/.exec(JSON.stringify(await pane.find({ key: 'run-1' })))?.[1]
+  const two = /Name: ([A-Za-z]+)/.exec(JSON.stringify(await pane.find({ key: 'run-2' })))?.[1]
+  expect(one).toBeDefined()
+  expect(two).toBeDefined()
+  expect(['Explore', 'Crew', 'Gate']).not.toContain(one)
+  expect(['Explore', 'Crew', 'Gate']).not.toContain(two)
+  expect(one).not.toBe(two)
   await pane.unmount()
 })

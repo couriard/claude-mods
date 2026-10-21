@@ -83,6 +83,8 @@ export type AgentRun = {
   lane?: string
   /** The costume picked at spawn for a run that is not a savvy tier; never the plain crab. */
   costume?: string
+  /** The sub-agent's first name: from its description when it starts with one, else given from a list. */
+  name?: string
 }
 
 export type Panel = {

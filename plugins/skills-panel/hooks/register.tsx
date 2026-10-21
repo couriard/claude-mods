@@ -1,11 +1,9 @@
-// Skills panel: the skills, gates and connectors of the session's project in one panel, each with
+// Skills panel: the skills and connectors of the session's project in one panel, each with
 // a switch, and a search of a skills library (a folder on this computer, or on a server reached
 // over ssh) with a switch that copies a skill in from it.
 //
 //   - A skill is "on" when its folder is in the project's own .claude/skills or in ~/.claude/skills,
 //     and the project's .claude/settings.json does not say "off" for it under skillOverrides.
-//   - A gate is a skill tagged skill-type/gate, or one whose file says Category: Gate, or one that
-//     came from the library's gates folder.
 //   - Switching on from the library copies the folder into the project's own .claude/skills with a
 //     receipt (.from-vault.json) inside it, and takes any "off" out of settings.json.
 //   - Switching off writes "off" into settings.json and, when the copy is one that came from the
@@ -21,11 +19,11 @@ const COMMAND = 'skills-panel'
 
 // Where the skills library is: the person's own settings, read when the module loads (see register).
 // `path` empty means no library is set up, and the panel says how to set one.
-type LibraryConfig = { host: string; path: string; skillsFolder: string; gatesFolder: string }
-let library: LibraryConfig = { host: '', path: '', skillsFolder: 'Skills', gatesFolder: 'Gates' }
-const libraryFolders = (): string[] => [library.skillsFolder, library.gatesFolder].filter(Boolean)
+type LibraryConfig = { host: string; path: string; skillsFolder: string }
+let library: LibraryConfig = { host: '', path: '', skillsFolder: '' }
+// The folder inside the library that holds the skills; '.' when they sit in the library folder itself.
+const libraryFolders = (): string[] => [library.skillsFolder || '.']
 
-const GATE_TAG = 'skill-type/gate'
 const RECEIPT = '.from-vault.json'
 // A fresh listing is asked for after this long (fifteen minutes).
 const VAULT_STALE_MS = 15 * 60 * 1000
@@ -42,6 +40,8 @@ const installed = atom({ plugin: 'skills-panel', key: 'installed' } as const, []
 const vault = atom({ plugin: 'skills-panel', key: 'vault' } as const, null)
 const faulted = atom({ plugin: 'skills-panel', key: 'faulted' } as const, [])
 const connectors = atom({ plugin: 'skills-panel', key: 'connectors' } as const, null)
+// Servers switched off for this session by the panel itself (those the app's switch cannot reach).
+const hiddenServers = atom({ plugin: 'skills-panel', key: 'hidden' } as const, [])
 const view = atom({ plugin: 'skills-panel', key: 'view' } as const, { tab: 'skills', showActive: true, query: '', busy: '', note: '' })
 
 // A skill's name: lower case letters, digits and hyphens, nothing that could be a path.
@@ -92,7 +92,6 @@ const frontOf = (text: string): Front => {
   return out
 }
 
-const isGateFront = (f: Front): boolean => f.tags.includes(GATE_TAG) || f.category.trim().toLowerCase() === 'gate'
 
 // ---------------------------------------------------------------------------------------------
 // Where things are: the project (the session's folder) and the skills in ~/.claude/skills.
@@ -148,17 +147,15 @@ async function readFolder($: EngineInterface, dir: string, where: Installed['whe
       continue
     }
     let isFromVault = false
-    let fromGates = false
     try {
       const receipt = JSON.parse(await $.fs.read(`${folder}/${RECEIPT}`)) as { name?: unknown; folder?: unknown }
       isFromVault = receipt?.name === entry.name
-      fromGates = isFromVault && !!library.gatesFolder && receipt.folder === library.gatesFolder
     } catch {
       // No receipt: a skill written by hand, or placed here some other way.
     }
     out.push({
       name: entry.name,
-      kind: isGateFront(front) || fromGates ? 'gate' : 'skill',
+      kind: 'skill',
       version: front.version,
       description: front.description,
       isOff: off.has(entry.name),
@@ -261,7 +258,7 @@ async function fetchVault($: EngineInterface, isFresh: boolean): Promise<VaultEn
     .map(r => ({
       name: r.name,
       folder: r.folder,
-      kind: (library.gatesFolder && r.folder === library.gatesFolder) || r.tags.includes(GATE_TAG) || r.category.trim().toLowerCase() === 'gate' ? 'gate' : 'skill',
+      kind: 'skill',
       version: r.version,
       description: r.description,
       tags: r.tags,
@@ -278,26 +275,6 @@ const matches = (entry: VaultEntry, query: string): boolean => {
 
 // ---------------------------------------------------------------------------------------------
 // Switching: on, off, and on from the library.
-
-// A gate copied from the library's gates folder says so in its own file: the folder
-// does not come down with the copy, so without the tag the copy would read as an ordinary skill.
-const sayItIsAGate = (text: string): string => {
-  if (frontOf(text).tags.includes(GATE_TAG)) return text
-  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
-  if (!m) return text
-  const front = m[1] ?? ''
-  const tagsBlock = /(^|\n)Tags:[ \t]*\n((?:[ \t]+-[^\n]*\n?)+)/.exec(front)
-  let next: string
-  if (tagsBlock) {
-    const items = tagsBlock[2] ?? ''
-    const indent = /^[ \t]*/.exec(items)?.[0] ?? '  '
-    const added = items.replace(/\n?$/, '\n') + `${indent}- ${GATE_TAG}\n`
-    next = front.replace(tagsBlock[0], `${tagsBlock[1]}Tags:\n${added}`)
-  } else {
-    next = front.replace(/\n?$/, '\n') + `Tags:\n  - ${GATE_TAG}`
-  }
-  return text.replace(m[0], `---\n${next.replace(/\n$/, '')}\n---`)
-}
 
 // The folder a name would take in the project, checked: a direct child of the project's own
 // .claude/skills once every link is followed, so a planted link cannot lead the delete elsewhere.
@@ -336,10 +313,6 @@ async function pullFromVault($: EngineInterface, entry: VaultEntry): Promise<voi
   const { exitCode, stderr } = await $.process.run(argv, { timeoutMs: 120000 })
   if (exitCode !== 0) throw new Error(`the library could not be read: ${(stderr || '').trim().split('\n')[0] || 'no reason given'}`)
   if (!(await $.fs.exists(`${copy.path}/SKILL.md`))) throw new Error(`${entry.name} came down without a SKILL.md`)
-  if (library.gatesFolder && entry.folder === library.gatesFolder) {
-    const skillMd = `${copy.path}/SKILL.md`
-    await $.fs.write(skillMd, sayItIsAGate(await $.fs.read(skillMd)))
-  }
   const today = new Date(await $.clock.now()).toISOString().slice(0, 10)
   const receipt = { name: entry.name, folder: entry.folder, version: entry.version, host: library.host || 'local', pulled: today }
   await $.fs.write(`${copy.path}/${RECEIPT}`, JSON.stringify(receipt, null, 2) + '\n')
@@ -456,10 +429,28 @@ async function setConnector($: EngineInterface, c: Connector, isOn: boolean): Pr
   if (result.isError) throw new Error(textOf(result) || `the app would not switch ${c.name}`)
 }
 
+// A server's tools are named mcp__<server>__<tool>, the server's name with anything but letters,
+// digits, _ and - made _.
+const toolPrefix = (server: string): string => `mcp__${server.replace(/[^A-Za-z0-9_-]/g, '_')}__`
+const serverOfTool = (tool: string, hidden: readonly string[]): string | undefined => hidden.find(h => tool.startsWith(toolPrefix(h)))
+
+// A server the app's switch cannot reach (a desktop extension, a plugin's or the project's server,
+// one built into the app) is switched off for this session by the panel: its tools leave the
+// prompt's list (behind tool search) and every call to them is refused, until it is switched back
+// on or the session ends. Nothing in its own settings changes.
+async function switchHidden($: EngineInterface, c: Connector): Promise<string> {
+  const isOff = (await read($, hiddenServers)).includes(c.name)
+  await update($, hiddenServers, list => (isOff ? list.filter(n => n !== c.name) : [...list, c.name]))
+  $.ui.invalidate('tool.describe')
+  return isOff
+    ? `${c.name} switched back on for this session`
+    : `${c.name} switched off for this session: its tools are hidden and refused until you switch it on`
+}
+
 async function switchConnector($: EngineInterface, name: string): Promise<string> {
   const c = (await read($, connectors))?.find(x => x.name === name)
   if (!c) throw new Error(`${name} is not one of this session's connectors`)
-  if (c.kind !== 'connector') throw new Error(`${name} is managed in its own settings, not here`)
+  if (c.kind !== 'connector') return switchHidden($, c)
   const isOn = c.status === 'disabled'
   // Its state before the first change this session, so session.end can put it back.
   const key = await restoreKey($)
@@ -487,10 +478,10 @@ async function restoreConnectors($: EngineInterface): Promise<void> {
 // What a connector's row says beneath its name: where it comes from.
 const KIND_WORDS: Record<string, string> = {
   connector: 'A connector from your Claude account.',
-  desktop: 'A desktop extension, managed in the app’s Extensions settings.',
-  server: 'A server from a plugin or this project’s settings, managed there.',
-  plugin: 'A server from a plugin, managed in its own settings.',
-  other: 'Built into the app, managed in its own settings.',
+  desktop: 'A desktop extension. Switched off here, it is off for this session only.',
+  server: 'A server from a plugin or this project’s settings. Switched off here, it is off for this session only.',
+  plugin: 'A server from a plugin. Switched off here, it is off for this session only.',
+  other: 'Built into the app. Switched off here, it is off for this session only.',
 }
 // Its state, beside its name.
 const statusWords = (c: Connector): string =>
@@ -503,12 +494,12 @@ const statusWords = (c: Connector): string =>
 
 async function openPane($: EngineInterface): Promise<void> {
   await refresh($)
-  await $.ui.open({ id: PANE, title: 'Skills and Gates', focus: true })
+  await $.ui.open({ id: PANE, title: 'Skills Panel', focus: true })
 }
 
 // ---------------------------------------------------------------------------------------------
-// The layout: Skills | Gates | Connectors tabs, a search and an "Active Only" tick box on one line,
-// then one row per skill, gate or connector with its switch.
+// The layout: Skills | Connectors tabs, a search and an "Active Only" tick box on one line, then
+// one row per skill or connector with its switch.
 //
 // Ticked, the rows are what is switched on here. Unticked, they are everything that is not: what
 // is switched off here, then everything in the library not installed here; switching a library
@@ -518,7 +509,6 @@ async function openPane($: EngineInterface): Promise<void> {
 
 const TABS = [
   { value: 'skills', label: 'Skills' },
-  { value: 'gates', label: 'Gates' },
   { value: 'connectors', label: 'Connectors' },
 ]
 const CARDS_MAX = 40
@@ -592,7 +582,7 @@ const switchWords = (c: { name: string; isOn: boolean }, busy: string): string =
 // About 4px at the panel's text size: a four-per-em space and a hair space, neither of which collapses.
 const SWITCH_INSET = '\u2005\u200a'
 
-// One row's worth: an installed skill or gate, a library entry not installed here, or a connector.
+// One row's worth: an installed skill, a library entry not installed here, or a connector.
 // `canSwitch` false draws the row without a switch (a connector managed in its own settings).
 type CardRow = { name: string; version: string; description: string; tag: string; isOn: boolean; canSwitch?: boolean }
 
@@ -610,8 +600,7 @@ export const register: Register = (on, options) => {
   library = {
     host: clean(options.libraryServer),
     path: clean(options.libraryFolder),
-    skillsFolder: clean(options.skillsFolder, 'Skills') || 'Skills',
-    gatesFolder: clean(options.gatesFolder, 'Gates'),
+    skillsFolder: clean(options.skillsFolder),
   }
 
   // Connectors this session changed go back to how they were, so a change stays the session's.
@@ -624,15 +613,26 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // A server switched off by the panel: its tools go behind tool search, and calls are refused.
+  on('tool.describe', async ($, e, next) => {
+    const answer = await next(e)
+    return serverOfTool(e.tool, await read($, hiddenServers)) ? { ...answer, isDeferred: true } : answer
+  })
+  on('tool.check', async ($, e, next) => {
+    const server = serverOfTool(e.tool, await read($, hiddenServers))
+    if (server) return { decision: 'deny', reason: `${server} is switched off for this session in the Skills Panel` }
+    return next(e)
+  })
+
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    await $.command.register({ name: COMMAND, description: 'Open the Skills and Gates panel: skills, gates and connectors, each with a switch' })
+    await $.command.register({ name: COMMAND, description: 'Open the Skills Panel: your skills and connectors, each with a switch' })
     return started
   })
 
   on('command.run', { command: COMMAND }, async $ => {
     await openPane($)
-    return { text: 'Skills and Gates panel opened.' }
+    return { text: 'Skills Panel opened.' }
   })
 
   // A surface that could not draw one of the panel's own pieces: note it, so the next drawing on
@@ -646,7 +646,7 @@ export const register: Register = (on, options) => {
   // flip, a card its switch.
   on('ui.message', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const data = (e.data ?? {}) as { toggle?: unknown; tab?: unknown }
-    if (e.element === 'tabs' && (data.tab === 'skills' || data.tab === 'gates' || data.tab === 'connectors')) {
+    if (e.element === 'tabs' && (data.tab === 'skills' || data.tab === 'connectors')) {
       const tab = data.tab
       await update($, view, v => ({ ...v, tab, note: '' }))
       if (tab === 'connectors') await loadConnectors($)
@@ -674,9 +674,10 @@ export const register: Register = (on, options) => {
     const list = await read($, installed)
     const v = await read($, view)
     const vaultList = await read($, vault)
-    const kind = v.tab === 'gates' ? 'gate' : 'skill'
+    const kind = 'skill'
     const connectorList = await read($, connectors)
-    const mine = list.filter(s => s.kind === kind)
+    const hidden = await read($, hiddenServers)
+    const mine = list
     const installedNames = new Set(list.map(s => s.name))
 
     const toCard = (s: Installed): CardRow => ({
@@ -691,13 +692,13 @@ export const register: Register = (on, options) => {
       name: c.name,
       version: '',
       description: KIND_WORDS[c.kind] ?? KIND_WORDS.other ?? '',
-      tag: statusWords(c),
-      isOn: c.status !== 'disabled',
-      canSwitch: c.kind === 'connector',
+      tag: hidden.includes(c.name) ? 'Off for this session' : statusWords(c),
+      isOn: c.status !== 'disabled' && !hidden.includes(c.name),
+      canSwitch: true,
     })
     const cards: CardRow[] = (
       v.tab === 'connectors'
-        ? (connectorList ?? []).filter(c => (v.showActive ? c.status !== 'disabled' : c.status === 'disabled')).map(fromConnector)
+        ? (connectorList ?? []).filter(c => (c.status !== 'disabled' && !hidden.includes(c.name)) === v.showActive).map(fromConnector)
         : v.showActive
           ? mine.filter(s => !s.isOff).map(toCard)
           : [
@@ -723,7 +724,7 @@ export const register: Register = (on, options) => {
     // tree holds one ("has not drawn in this pane"), without raising ui.fault.
     // So the desktop gets the same layout from its own buttons and drawn cards.
     const canDrawOwn = e.surface === 'terminal' && 'Client' in ui && !(await read($, faulted)).includes(e.surface)
-    const noun = v.tab === 'gates' ? 'gates' : v.tab === 'connectors' ? 'connectors' : 'skills'
+    const noun = v.tab === 'connectors' ? 'connectors' : 'skills'
     const empty = v.query
       ? `Nothing matches "${v.query}".`
       : v.showActive

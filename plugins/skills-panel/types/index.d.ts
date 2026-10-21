@@ -1,8 +1,7 @@
-/** One skill or gate on this Mac: in the project's own .claude/skills or the personal library. */
+/** One skill on this computer: in the project's own .claude/skills or in ~/.claude/skills. */
 export type Installed = {
   name: string
-  /** A gate carries the skill-type/gate tag, says Category: Gate, or came from the library's gates folder. */
-  kind: 'skill' | 'gate'
+  kind: 'skill'
   version: string
   description: string
   /** "off" in the project's .claude/settings.json skillOverrides. */
@@ -16,9 +15,9 @@ export type Installed = {
 /** One entry of the skills library's listing. */
 export type VaultEntry = {
   name: string
-  /** The library folder it sits in: the Skills Folder or the Gates Folder setting. */
+  /** The library folder it sits in: the Skills Folder setting, or '.' for the library folder itself. */
   folder: string
-  kind: 'skill' | 'gate'
+  kind: 'skill'
   version: string
   description: string
   tags: string[]
@@ -37,8 +36,8 @@ export type Connector = {
 }
 
 export type View = {
-  /** Which list is open: the project's skills, its gates, or this session's connectors. */
-  tab: 'skills' | 'gates' | 'connectors'
+  /** Which list is open: the project's skills, or this session's connectors. */
+  tab: 'skills' | 'connectors'
   /** Ticked: what is switched on. Unticked: what is switched off here, and the library's not installed. */
   showActive: boolean
   /** The search box's text, as last submitted. */
@@ -59,6 +58,8 @@ declare module 'claude-code' {
       faulted: string[]
       /** This session's connectors, read when the Connectors tab opens; null before. */
       connectors: Connector[] | null
+      /** Servers switched off for this session by the panel itself, by name. */
+      hidden: string[]
     }
   }
 }

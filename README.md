@@ -4,7 +4,7 @@ Two mods for [Claude Code](https://code.claude.com): small additions to its own 
 
 | Mod | What it adds |
 |---|---|
-| [**Skills Panel**](plugins/skills-panel) | One panel for your skills, gates and connectors, each with a switch, a search, and a one-click install from your own skills library. |
+| [**Skills Panel**](plugins/skills-panel) | One panel for your skills and connectors, each with a switch, a search, and a one-click install from your own skills library. |
 | [**Fun Savvy Progress**](plugins/fun-savvy-progress) | A live panel of your sub-agents, each with its model, progress, the skills it used and a creature of its own, plus a progress bar above the prompt. A fork of [johnnyvizz's savvy-progress](https://github.com/johnnyvizz/claude-kit/tree/main/plugins/savvy-progress). |
 
 <p>

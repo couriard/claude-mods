@@ -674,6 +674,27 @@ const costumeOf = (type: string): string => (type === 'Explore' ? 'explore' : ti
 // broken by its own id, so neighbours differ and a crab keeps its look on every redraw.
 // The plain crab is never used. Its accent colour is its own too,
 // from a palette by id, so two crabs in the same costume still read apart.
+// Sub-agent names: ordinary first names. A description that starts with one ("Ada — the task")
+// keeps it; any other sub-agent is given one from this list, steady for it (picked from its own id)
+// and never one already in use by a running sub-agent.
+const FIRST_NAMES = ['Ada', 'Ben', 'Cleo', 'Dev', 'Eli', 'Freya', 'Gus', 'Hana', 'Iris', 'Jonah', 'Kai', 'Lena', 'Milo', 'Nora', 'Otto', 'Pia', 'Quinn', 'Ravi', 'Sana', 'Theo', 'Uma', 'Vera', 'Wes', 'Yara', 'Zane', 'Alma', 'Bram', 'Cora', 'Dara', 'Ezra', 'Fern', 'Hugo', 'Ines', 'Jude', 'Kira', 'Luca', 'Mara', 'Nils', 'Orla', 'Rhea']
+// Single capitalised words that are not names, so a description like "Explore — the repo" is not read as one.
+const NOT_NAMES = new Set(['gate', 'gates', 'crew', 'explore', 'plan', 'review', 'check', 'fix', 'build', 'test', 'research', 'search', 'find', 'write', 'agent', 'task', 'worker', 'design', 'audit', 'general', 'update', 'add', 'make', 'run', 'read', 'refactor', 'debug', 'docs', 'copy'])
+const firstNameOf = (lead: string): string => {
+  const w = (lead || '').trim()
+  return /^[A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)?$/.test(w) && !NOT_NAMES.has(w.toLowerCase()) ? w : ''
+}
+const pickName = (id: string, taken: readonly string[]): string => {
+  const start = hashOf(id) % FIRST_NAMES.length
+  for (let k = 0; k < FIRST_NAMES.length; k++) {
+    const n = FIRST_NAMES[(start + k) % FIRST_NAMES.length] ?? 'Ada'
+    if (!taken.includes(n)) return n
+  }
+  return FIRST_NAMES[start] ?? 'Ada'
+}
+// A run's name: the one given at spawn, else worked out the same way (runs from before names existed).
+const nameOf = (a: AgentRun): string => a.name || firstNameOf(splitDescription(a.description).crew) || pickName(a.id, [])
+
 const RANDOM_COSTUMES = ['fable', 'heavy', 'careful', 'medium', 'light', 'explore']
 const ACCENTS = ['#7F77DD', '#D85A30', '#BA7517', '#378ADD', '#1D9E75', '#C13584', '#2A9D8F', '#E9A23B', '#5B8DEF', '#8E44AD']
 const hashOf = (s: string): number => {
@@ -806,13 +827,9 @@ const metaOf = (a: AgentRun, f: Flow | null): string[] => {
   const s = tr()
   const { crew } = splitDescription(a.description)
   const model = a.effort ? `${modelName(a.model)} · ${effortName(a.effort)}` : modelName(a.model)
-  // A gate reads "Gate: Design", a crew "Name: Ada": the same shape on every row, and a gate's kind is never shown as a name.
-  const who = a.crew || crew || a.type
-  const first = isGateRun(a) ? (gateKindOf(a) ? `${s.gate}: ${gateKindOf(a)}` : '') : `${s.crew}: ${titleCase(who)}`
-  const parts = [first, `${s.model}: ${model}`].filter(Boolean)
-  const task = taskOfRun(a, f)
-  const ids = task?.id ? [task.id] : (a.taskIds ?? [])
-  if (ids.length) parts.push(`${s.task}: ${ids.join(', ')}`)
+  // Every row, gates included, reads Name, Model, then Skills; a gate's kind is in its heading.
+  void crew
+  const parts = [`${s.crew}: ${nameOf(a)}`, `${s.model}: ${model}`]
   // The skills this sub-agent used, under its task. Every row carries the line, "None" when it used none.
   parts.push(`${s.skills}: ${a.skills?.length ? a.skills.map(nameCase).join(', ') : s.none}`)
   if (a.round > 1) parts.push(`${s.round} ${a.round}`)
@@ -1174,6 +1191,7 @@ export const register: Register = (on, options) => {
         taskIds: taskIdsOf(e.prompt ?? '', ids),
         crew,
         lane,
+        name: firstNameOf(crew) || pickName(started.agentId ?? e.tool_use_id, list.filter(r => r.status === 'running').map(nameOf)),
         costume: costumeOf(e.subagentType) === 'other' ? pickCostume(started.agentId ?? e.tool_use_id, list.slice(-RANDOM_COSTUMES.length + 1).map(r => costumeFor(r))) : undefined,
       }
       return [...list.filter(a => a.id !== run.id), run].slice(-200)

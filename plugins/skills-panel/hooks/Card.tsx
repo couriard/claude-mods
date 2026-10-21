@@ -1,4 +1,4 @@
-// One skill, gate or connector as a card, drawn in the terminal: the name at the top,
+// One skill or connector as a card, drawn in the terminal: the name at the top,
 // its description in grey on up to two lines, and the on/off switch inside the card at the bottom
 // right. A click on the switch flips it; a click anywhere else on the card does nothing, so a
 // card can be read without changing anything by accident.

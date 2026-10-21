@@ -1,12 +1,20 @@
 {
   "name": "skills-panel",
   "version": "1.0.0",
-  "description": "A Claude Code panel for your skills, gates and connectors: Skills, Gates and Connectors tabs, a search, an Active Only filter, and a switch on every row. Point it at a skills library (a folder here, or on a server over ssh) to install skills from it with one click.",
-  "author": { "name": "couriard", "url": "https://github.com/couriard" },
+  "description": "A Claude Code panel for your skills and connectors: Skills and Connectors tabs, a search, an Active Only filter, and a switch on every row. Point it at a skills library (a folder here, or on a server over ssh) to install skills from it with one click.",
+  "author": {
+    "name": "couriard",
+    "url": "https://github.com/couriard"
+  },
   "homepage": "https://github.com/couriard/claude-mods/tree/main/plugins/skills-panel",
   "repository": "https://github.com/couriard/claude-mods",
   "license": "MIT",
-  "keywords": ["skills", "gates", "connectors", "panel", "mod"],
+  "keywords": [
+    "skills",
+    "connectors",
+    "panel",
+    "mod"
+  ],
   "types": "./types/index.d.ts",
   "userConfig": {
     "libraryFolder": {
@@ -24,14 +32,8 @@
     "skillsFolder": {
       "type": "string",
       "title": "Skills Folder",
-      "description": "The folder inside the library that holds skills, one folder per skill with a SKILL.md.",
-      "default": "Skills"
-    },
-    "gatesFolder": {
-      "type": "string",
-      "title": "Gates Folder",
-      "description": "The folder inside the library that holds gates (checking skills). Leave empty if your gates live with your skills, tagged skill-type/gate.",
-      "default": "Gates"
+      "description": "The folder inside the library that holds the skills, one folder per skill with a SKILL.md. Leave empty when the skills sit directly in the Library Folder.",
+      "default": ""
     }
   }
 }
