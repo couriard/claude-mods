@@ -757,9 +757,9 @@ export const register: Register = (on, options) => {
             </Box>
           )}
           {v.tab === 'connectors' ? (
-            <Button key="refresh-connectors" label="Check Again" plain dimColor onPress={() => void loadConnectors($)} />
+            <Button key="refresh-connectors" label="Refresh" plain dimColor onPress={() => void loadConnectors($)} />
           ) : (
-            library.path ? <Button key="refresh-vault" label="Read the Library Again" plain dimColor onPress={() => void loadVault($, true)} /> : null
+            library.path ? <Button key="refresh-vault" label="Refresh" plain dimColor onPress={() => void loadVault($, true)} /> : null
           )}
         </Box>
         {/* Search and Active Only on one line: the search box takes the

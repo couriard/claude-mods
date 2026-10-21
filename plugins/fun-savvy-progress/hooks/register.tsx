@@ -3,18 +3,18 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AgentRun, Flow, GateRecord, Health, Panel, Phase, PlannedTask } from '../types'
 
-const flow = atom({ plugin: 'savvy-progress', key: 'flow' } as const, null)
-const agents = atom({ plugin: 'savvy-progress', key: 'agents' } as const, [])
-const panel = atom({ plugin: 'savvy-progress', key: 'panel' } as const, {
+const flow = atom({ plugin: 'fun-savvy-progress', key: 'flow' } as const, null)
+const agents = atom({ plugin: 'fun-savvy-progress', key: 'agents' } as const, [])
+const panel = atom({ plugin: 'fun-savvy-progress', key: 'panel' } as const, {
   isCompact: false,
   isDoneCollapsed: false,
   autoOpenedFor: '',
 })
-const now = atom({ plugin: 'savvy-progress', key: 'now' } as const, 0)
-const skillsUsed = atom({ plugin: 'savvy-progress', key: 'skills' } as const, [])
+const now = atom({ plugin: 'fun-savvy-progress', key: 'now' } as const, 0)
+const skillsUsed = atom({ plugin: 'fun-savvy-progress', key: 'skills' } as const, [])
 
-const TOOL = 'mcp__savvy-progress__progress'
-const STEP_TOOL = 'mcp__savvy-progress__step'
+const TOOL = 'mcp__fun-savvy-progress__progress'
+const STEP_TOOL = 'mcp__fun-savvy-progress__step'
 const PANE = 'savvy-agents'
 const PHASES: readonly Phase[] = ['plan', 'design', 'delegate', 'review', 'close']
 const ACCENT = '#8f8cf4'
@@ -80,8 +80,6 @@ const STRINGS = {
     watchdog: 'Watchdog',
     paused: 'Paused',
     slots: 'Slots',
-    openTask: 'Open Task',
-    openFailed: 'Could Not Open the Task',
     none: 'None',
   },
   ru: {
@@ -125,8 +123,6 @@ const STRINGS = {
     watchdog: 'сторож',
     paused: 'пауза',
     slots: 'слоты',
-    openTask: 'Открыть задачу',
-    openFailed: 'Не удалось открыть задачу',
     none: 'Нет',
   },
 } as const
@@ -419,31 +415,6 @@ const taskIdsOf = (text: string, known: readonly (string | undefined)[]): string
 }
 const knownIds = (f: Flow | null): (string | undefined)[] => (f?.tasks ?? []).map(t => t.id)
 
-// ---------------------------------------------------------------------------
-// Opening a task where it lives: the Task Link setting, a web address with {id} where the task's
-// id goes (https://app.clickup.com/t/{id}, https://linear.app/team/issue/{id}, a tracker's own
-// app link). Left empty, task rows carry no open button.
-
-let taskLink = ''
-const canOpen = (id: string | undefined): id is string => !!id && !!taskLink
-const taskUrl = (id: string): string => taskLink.replaceAll('{id}', encodeURIComponent(id))
-
-async function openTask($: EngineInterface, id: string): Promise<void> {
-  const url = taskUrl(id)
-  // macOS opens with `open`, Linux with `xdg-open`, Windows through `cmd /c start`.
-  for (const argv of [['open', url], ['xdg-open', url], ['cmd', '/c', 'start', '', url]]) {
-    try {
-      const { exitCode } = await $.process.run(argv)
-      if (exitCode === 0) return
-    } catch {
-      // Not this system's opener: try the next.
-    }
-  }
-  $.ui.toast(`${tr().openFailed} ${id}`)
-}
-
-const openLabel = (): string => tr().openTask
-
 const SMALL = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with', 'its', 'is', 'not'])
 // Words with a spelling of their own, kept as their owners write them.
 const SPELLED: Record<string, string> = { clickup: 'ClickUp', seo: 'SEO', aeo: 'AEO', cro: 'CRO', cta: 'CTA', ui: 'UI', ux: 'UX', ai: 'AI' }
@@ -528,58 +499,6 @@ const costTasksOf = (answer: string): string[] =>
     .map(l => /"task"\s*:\s*"([^"]*)"/i.exec(l)?.[1]?.trim() ?? '')
     .filter(Boolean)
 
-// Does this gate record speak of this task? By id, or by the task's words.
-const recordNamesTask = (r: GateRecord, t: PlannedTask): boolean => {
-  const key = norm(r.task)
-  if (!key) return false
-  if (t.id && key === norm(t.id)) return true
-  const title = norm(t.title)
-  return key === title || (key.length > 12 && title.includes(key)) || (title.length > 12 && key.includes(title))
-}
-
-type TaskView = {
-  task: PlannedTask
-  n: number
-  crew: string
-  status: string
-  gates: { name: string; verdict: string; attempts: number }[]
-  costUsd: number | null
-  isShared: boolean
-}
-
-// One row per task of the round: its crew, its gates' latest verdicts and attempts, and its cost.
-const taskViews = (f: Flow | null, list: AgentRun[]): TaskView[] => {
-  if (!f) return []
-  return (f.tasks ?? []).map((t, i) => {
-    const crews = list.filter(a => !a.isGate && ((t.id && a.taskIds?.includes(t.id)) || (t.crew && a.crew && norm(a.crew) === norm(t.crew))))
-    const latest = crews[crews.length - 1]
-    const crew = t.crew || latest?.crew || ''
-    const records = list.flatMap(a => (a.gateRecords ?? []).filter(r => recordNamesTask(r, t)))
-    const names = [...new Set([...(t.gates ?? []), ...records.map(r => r.gate)])]
-    const gates = names.map(name => {
-      const mine = records.filter(r => norm(r.gate) === norm(name))
-      const last = mine[mine.length - 1]
-      const running = list.some(a => a.isGate && a.status === 'running' && (t.id ? taskIdsOf(a.description + ' ' + (a.lane ?? ''), knownIds(f)).includes(t.id) : false))
-      return { name, verdict: last?.verdict ?? (running ? 'running' : 'expected'), attempts: mine.length }
-    })
-    // A crew that worked several tasks is left unattributed: its total is exact, no split of it would be.
-    const single = crews.filter(a => (a.taskIds?.length ?? 0) <= 1 && (a.costTasks?.length ?? 0) <= 1)
-    const isShared = crews.length > 0 && single.length < crews.length
-    const costUsd = crews.length ? single.reduce((s, a) => s + a.costUsd, 0) : null
-    const status =
-      t.status ??
-      (latest ? (latest.status === 'running' ? 'building' : gates.some(g => g.verdict === 'running') ? 'gating' : 'done') : 'to do')
-    return { task: t, n: i + 1, crew, status, gates, costUsd, isShared }
-  })
-}
-
-const gateGlyph = (verdict: string): string =>
-  verdict === 'pass' ? '✓' : verdict === 'fail' ? '✗' : verdict === 'running' ? '◷' : verdict === 'expected' ? '○' : '–'
-const gateColor = (verdict: string): string =>
-  verdict === 'pass' ? '#3B9C5F' : verdict === 'fail' ? '#D0453F' : verdict === 'running' ? ACCENT : '#9a9a96'
-
-// Short gate names for a chip: "gate-design-system" → "Design System".
-const gateShort = (name: string): string => nameCase(name.replace(/^gate-/, ''))
 
 // Gates by name across the session, for the chip: name → pass/fail/na counts.
 const gatesByName = (list: AgentRun[]): { name: string; pass: number; fail: number; na: number }[] => {
@@ -939,36 +858,6 @@ ${statusMark(W - 8, 20, a.status, color)}
   )
 }
 
-const TASK_H = 52
-// Room the open button takes beside a task row's drawing on the desktop.
-const OPEN_W = 160
-
-// One board task of the round: its heading, who has it, its gates and its cost.
-const taskSvg = (W: number, v: TaskView): string => {
-  const s = tr()
-  const textW = W - 22
-  const statusColor =
-    v.status === 'done' ? '#3B9C5F' : v.status === 'blocked' ? '#D0453F' : v.status === 'building' || v.status === 'gating' ? ACCENT : '#9a9a96'
-  const gates = v.gates
-    .map(g => {
-      const att = g.attempts > 1 ? ` ${g.attempts}` : ''
-      return `<tspan fill="${gateColor(g.verdict)}">${gateGlyph(g.verdict)}</tspan><tspan class="s"> ${xml(gateShort(g.name))}${att}</tspan>`
-    })
-    .join('<tspan class="s">   </tspan>')
-  const cost = v.costUsd === null ? '' : v.isShared ? `${fmtCost(v.costUsd)} + ${s.shared}` : fmtCost(v.costUsd)
-  const left = [v.crew ? `${s.crew}: ${titleCase(v.crew)}` : '', v.task.id ? `${s.task}: ${v.task.id}` : ''].filter(Boolean).join('   ·   ')
-  return svg(
-    W,
-    TASK_H,
-    `<circle cx="6" cy="16" r="4" fill="${statusColor}"${v.status === 'building' || v.status === 'gating' ? ' class="live"' : ''}/>
-<text class="t" x="18" y="20" font-family="${FONT}" font-size="13" font-weight="600">${xml(fitText(`${v.n}. ${titleCase(v.task.title)}`, 13, textW - 80))}</text>
-<text class="s" x="${W}" y="20" text-anchor="end" font-family="${FONT}" font-size="11">${xml(titleCase(v.status))}</text>
-<text x="18" y="38" font-family="${FONT}" font-size="11"><tspan class="s">${xml(fitText(left, 11, textW * 0.45))}</tspan>${left && gates ? '<tspan class="s">   ·   </tspan>' : ''}${gates}</text>
-<text class="s" x="${W}" y="38" text-anchor="end" font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${xml(cost)}</text>
-<line class="ln" x1="0" y1="${TASK_H - 0.5}" x2="${W}" y2="${TASK_H - 0.5}"/>`,
-  )
-}
-
 // The chips row: skills used, gates by name, and the run's health.
 const chipsSvg = (W: number, skills: string[], gates: ReturnType<typeof gatesByName>, health: Health | undefined): string => {
   const s = tr()
@@ -1074,7 +963,6 @@ async function noteSkill($: EngineInterface, agentId: string, name: string): Pro
 
 export const register: Register = (on, options) => {
   // The person's own settings (userConfig in plugin.json).
-  taskLink = typeof options.taskLink === 'string' && options.taskLink.includes('{id}') ? options.taskLink.trim() : ''
   const code = typeof options.currency === 'string' && options.currency in CURRENCY_SIGN ? options.currency : 'USD'
   const rate = Number.parseFloat(typeof options.exchangeRate === 'string' ? options.exchangeRate : '1')
   currency = { sign: CURRENCY_SIGN[code] ?? '$', perUsd: code === 'USD' || !(rate > 0) ? 1 : rate }
@@ -1385,13 +1273,12 @@ export const register: Register = (on, options) => {
     const running = list.filter(a => a.status === 'running').reverse()
     const finished = list.filter(a => a.status !== 'running').reverse()
     const planned = plannedOf(f, list)
-    const views = taskViews(f, list)
     const t = totals(list, at)
     const skills = [...new Set([...(await read($, skillsUsed)), ...(f?.skills ?? [])].map(nameCase))]
     const gateChips = gatesByName(list)
     const health = f?.health
     // Tasks: done of total, as the round reports them.
-    const taskCount = f && !f.isFinished && (f.total || views.length) ? { done: views.length ? views.filter(v => v.status === 'done').length : f.done, total: f.total || views.length } : undefined
+    const taskCount = f && !f.isFinished && f.total ? { done: f.done, total: f.total } : undefined
     // The pane's title says "Agents"; inside, only the flow's own name.
     const title = f && !f.isFinished ? titleCase(f.title) : ''
 
@@ -1407,10 +1294,6 @@ export const register: Register = (on, options) => {
       />
     )
     const isEmpty = list.length === 0 && planned.length === 0
-    // Each task's way out to where it lives, through the Task Link setting.
-    const openButton = (id: string) => (
-      <Button key={`open-${id}`} label={openLabel()} plain dimColor onPress={() => void openTask($, id)} />
-    )
     const summary = `${fmtCost(t.cost)}, ${fmtTokens(t.tokens)} ${s.tokensWord}, ${fmtTime(t.time)}`
 
     if (e.surface === 'desktop' && 'Svg' in ui) {
@@ -1436,19 +1319,7 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column">
           <Svg source={headerSvg(W, title, t, taskCount)} alt={title ? `${title}: ${summary}` : summary} width={W} height={headerHeight(title)} />
           {chipsH > 6 && <Svg source={chipsSvg(W, skills, gateChips, health)} alt={`${s.skills}: ${skills.join(', ')}`} width={W} height={chipsH} />}
-          {isEmpty && views.length === 0 && <Text dimColor>{s.empty}</Text>}
-          {views.length > 0 && <Text key="gap-tasks"> </Text>}
-          {views.length > 0 && section('h-tasks', `${s.tasksHead} · ${views.filter(v => v.status === 'done').length}/${views.length}`)}
-          {views.map(v =>
-            canOpen(v.task.id) ? (
-              <Box key={`task-${v.task.id}`} flexDirection="row" alignItems="center" gap={1}>
-                <Svg source={taskSvg(W - OPEN_W, v)} alt={`${v.n}. ${titleCase(v.task.title)}: ${titleCase(v.status)}`} width={W - OPEN_W} height={TASK_H} />
-                {openButton(v.task.id)}
-              </Box>
-            ) : (
-              <Svg key={`task-${v.task.id ?? v.n}`} source={taskSvg(W, v)} alt={`${v.n}. ${titleCase(v.task.title)}: ${titleCase(v.status)}`} width={W} height={TASK_H} />
-            ),
-          )}
+          {isEmpty && <Text dimColor>{s.empty}</Text>}
           {running.length > 0 && <Text key="gap-run"> </Text>}
           {running.length > 0 && section('h-run', `${s.running} · ${running.length}`)}
           {running.map(a => (
@@ -1499,25 +1370,6 @@ export const register: Register = (on, options) => {
         </Box>
       )
     }
-    const taskRow = (v: TaskView) => (
-      <Box key={`task-${v.task.id ?? v.n}`} flexDirection="column" marginBottom={1}>
-        <Text bold wrap="truncate-end">
-          {v.n}. {titleCase(v.task.title)} <Text dimColor>{titleCase(v.status)}</Text>
-        </Text>
-        <Text dimColor wrap="truncate-end">
-          {'  '}
-          {[v.crew ? `${s.crew}: ${titleCase(v.crew)}` : '', v.task.id ? `${s.task}: ${v.task.id}` : '', ...v.gates.map(g => `${gateGlyph(g.verdict)} ${gateShort(g.name)}${g.attempts > 1 ? ' ' + g.attempts : ''}`), v.costUsd === null ? '' : `${fmtCost(v.costUsd)}${v.isShared ? ' + ' + s.shared : ''}`]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
-        {canOpen(v.task.id) && (
-          <Box flexDirection="row">
-            <Text dimColor>{'  '}</Text>
-            {openButton(v.task.id)}
-          </Box>
-        )}
-      </Box>
-    )
     const chipLines = [
       skills.length ? `${s.skills}: ${skills.join(' · ')}` : '',
       health ? `${s.health}: ${[health.heartbeat === undefined ? '' : `${health.heartbeat ? '●' : '○'} ${s.heartbeat}`, health.watchdog === undefined ? '' : `${health.watchdog ? '●' : '○'} ${s.watchdog}`, health.paused ? s.paused : '', health.slots ? `${health.slots} ${s.slots}` : ''].filter(Boolean).join(' · ')}` : '',
@@ -1555,9 +1407,7 @@ export const register: Register = (on, options) => {
           </Text>
         ) : (
           <Box flexDirection="column" marginTop={1}>
-            {isEmpty && views.length === 0 && <Text dimColor>{s.empty}</Text>}
-            {views.length > 0 && <Text dimColor>{s.tasksHead} · {views.filter(v => v.status === 'done').length}/{views.length}</Text>}
-            {views.map(taskRow)}
+            {isEmpty && <Text dimColor>{s.empty}</Text>}
             {running.length > 0 && <Text dimColor>{s.running} · {running.length}</Text>}
             {running.map(row)}
             {finished.length > 0 && toggleDone}

@@ -224,7 +224,7 @@ test('the desktop: Skills | Gates buttons, Active Only, drawn cards with a switc
   // Read the Vault Again sits on the tabs' line, at its right.
   const top = JSON.stringify(await pane.find({ key: 'top' }))
   expect(top).toContain('space-between')
-  expect(top).toContain('Read the Library Again')
+  expect(top).toContain('Refresh')
   expect(top).toContain('tab-skills')
   // No cards: each row a drawing with a hairline above, and a small plain button under it, at the left.
   const holder = JSON.stringify(await pane.find({ key: 'card-plan-interview' }))

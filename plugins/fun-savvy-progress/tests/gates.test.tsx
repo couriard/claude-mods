@@ -17,7 +17,7 @@ const engine = (on: On): void => {
 test('nothing shows above the prompt before any gate or flow', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({
-    plugin: 'savvy-progress',
+    plugin: 'fun-savvy-progress',
     surface: 'terminal',
     component: 'AbovePrompt',
     props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 120 },
@@ -40,7 +40,7 @@ test('gate verdicts alone draw no band above the prompt', async ($, on) => {
     reason: 'answer',
   } as never)
   const ui = await $.ui.mount({
-    plugin: 'savvy-progress',
+    plugin: 'fun-savvy-progress',
     surface: 'desktop',
     component: 'AbovePrompt',
     props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 120 },
@@ -49,15 +49,15 @@ test('gate verdicts alone draw no band above the prompt', async ($, on) => {
   await ui.unmount()
 })
 
-// A reported round with a task: the band shows the gates counter, and the panel shows the task row
-// with its crew, its gate's verdict and the crew's cost, headed by the task's title.
-test('a reported round shows per-task rows in the panel and the gates counter above the prompt', async ($, on) => {
+// A reported round: the band shows the gates counter, and each sub-agent is headed by the task it
+// works, with its name, model, task and the skills it used.
+test('a reported round heads each sub-agent with its task, and the gates counter shows above the prompt', async ($, on) => {
   engine(on)
   on('agent.spawn', async (_$, e) => ({ model: /gate/i.test(e.description) ? 'claude-sonnet-5' : 'claude-opus-5-5', agentId: /gate/i.test(e.description) ? 'gate-2' : 'crew-1' }))
   on('tool.call', { tool: 'Skill' }, async () => ({ result: 'ok' }) as never)
   on('tool.call', { tool: 'Read' }, async () => ({ result: 'ok' }) as never)
   await $.tool.call({
-    tool: 'mcp__savvy-progress__progress',
+    tool: 'mcp__fun-savvy-progress__progress',
     title: 'Release 2.0',
     phaseLabel: 'Building',
     tasks: [
@@ -95,7 +95,7 @@ test('a reported round shows per-task rows in the panel and the gates counter ab
   } as never)
 
   const band = await $.ui.mount({
-    plugin: 'savvy-progress',
+    plugin: 'fun-savvy-progress',
     surface: 'terminal',
     component: 'AbovePrompt',
     props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 120 },
@@ -106,19 +106,14 @@ test('a reported round shows per-task rows in the panel and the gates counter ab
   await band.unmount()
 
   const pane = await $.ui.mount({
-    plugin: 'savvy-progress',
+    plugin: 'fun-savvy-progress',
     surface: 'terminal',
     component: 'Pane',
     requestId: 'savvy-agents',
     props: { bodyColumns: 120, title: 'Agents' },
   } as never)
-  const text = JSON.stringify(await pane.find({ key: 'task-TASK-41' }))
-  expect(text).toContain('Checkout Page: the Total Updates When the Basket Changes')
-  expect(text).toContain('Name: Crew A')
-  expect(text).toContain('✓ Style')
-  expect(text).toContain('○ Record')
-  // No Task Link set: no open button.
-  expect(await pane.find({ key: 'open-TASK-41' })).toBeUndefined()
+  // No Tasks list: the round's tasks head the sub-agents that work them instead.
+  expect(await pane.find({ key: 'task-TASK-41' })).toBeUndefined()
   const crewRow = JSON.stringify(await pane.find({ key: 'crew-1' }))
   expect(crewRow).toContain('Model: Opus 5.5')
   expect(crewRow).toContain('Task: TASK-41')
@@ -134,45 +129,15 @@ test('a reported round shows per-task rows in the panel and the gates counter ab
   await pane.unmount()
 })
 
-// With the Task Link setting, each task row carries an Open Task button that opens the task's own
-// address; statuses read in title case and costs carry the chosen currency.
-for (const surface of ['terminal', 'desktop'] as const) {
-  test(`task rows open the task through the Task Link setting (${surface})`, { options: { taskLink: 'https://tracker.example/t/{id}', currency: 'GBP', exchangeRate: '0.5' } }, async ($, on) => {
-    engine(on)
-    const opened: string[] = []
-    on('process.run', async (_$, e) => {
-      opened.push(e.argv.join(' '))
-      return { value: { exitCode: 0, stdout: '', stderr: '' } } as never
-    })
-    on('ui.toast', async () => ({ value: undefined }) as never)
-    await $.tool.call({
-      tool: 'mcp__savvy-progress__progress',
-      title: 'Release 2.0',
-      tasks: [
-        { title: 'basket total', id: 'TASK-41', status: 'to do' },
-        { title: 'delivery dates', id: 'TASK-42', status: 'building' },
-      ],
-    } as never)
-    const pane = await $.ui.mount({
-      plugin: 'savvy-progress',
-      surface,
-      component: 'Pane',
-      requestId: 'savvy-agents',
-      props: { bodyColumns: 120, title: 'Agents' },
-    } as never)
-    expect(JSON.stringify(await pane.find({ key: 'open-TASK-41' }))).toContain('Open Task')
-    await pane.press({ key: 'open-TASK-41' })
-    await pane.press({ key: 'open-TASK-42' })
-    expect(opened[0]).toBe('open https://tracker.example/t/TASK-41')
-    expect(opened[1]).toBe('open https://tracker.example/t/TASK-42')
-    if (surface === 'terminal') {
-      const row = JSON.stringify(await pane.find({ key: 'task-TASK-41' }))
-      expect(row).toContain('To Do')
-      expect(JSON.stringify(await pane.drawn())).toContain('£0.00')
-    }
-    await pane.unmount()
-  })
-}
+// The Currency setting: costs in the chosen currency at the chosen rate.
+test('costs show in the Currency setting', { options: { currency: 'GBP', exchangeRate: '0.5' } }, async ($, on) => {
+  engine(on)
+  on('agent.spawn', async () => ({ model: 'claude-opus-5-5', agentId: 'crew-9' }))
+  await $.agent.spawn({ tool_use_id: 'z', prompt: 'work', description: 'Crew Z — anything', subagentType: 'claude', provider: 'user' } as never)
+  const pane = await $.ui.mount({ plugin: 'fun-savvy-progress', surface: 'terminal', component: 'Pane', requestId: 'savvy-agents', props: { bodyColumns: 120, title: 'Agents' } } as never)
+  expect(JSON.stringify(await pane.drawn())).toContain('£0.00')
+  await pane.unmount()
+})
 
 // A gate named the other way round, "Gate: <kind> check, <what>", reads the same as "<kind> gate, <what>":
 // the word "Gate" appears once in the heading and the grey line names the kind.
@@ -181,7 +146,7 @@ test('a gate named "Gate: design system check" reads Design System Gate, never G
   on('agent.spawn', async () => ({ model: 'claude-sonnet-5', agentId: 'gate-3' }))
   await $.agent.spawn({ tool_use_id: 't3', prompt: 'check it', description: 'Gate: design system check, toolbar spacing', subagentType: 'claude', provider: 'user' } as never)
   const pane = await $.ui.mount({
-    plugin: 'savvy-progress',
+    plugin: 'fun-savvy-progress',
     surface: 'terminal',
     component: 'Pane',
     requestId: 'savvy-agents',

@@ -1,12 +1,12 @@
 {
-  "name": "savvy-progress",
-  "version": "1.6.0",
-  "description": "A progress bar above the prompt and an agents panel (/agents-info) for sub-agent work: one row per task with its sub-agent, gates and cost, a row per sub-agent with its model, the skills it used and a steady creature of its own, and run health. A fork of johnnyvizz's savvy-progress (MIT), with task rows, gate tracking, open-task links and a currency setting added.",
+  "name": "fun-savvy-progress",
+  "version": "1.0.0",
+  "description": "A progress bar above the prompt and a live agents panel (/agents-info) for sub-agent work: each sub-agent with its model, progress, the skills it used and a steady creature of its own, a gates counter, totals in your currency, and run health. A fork of johnnyvizz's savvy-progress (MIT).",
   "author": {
     "name": "johnnyvizz, fork by couriard",
     "url": "https://github.com/couriard"
   },
-  "homepage": "https://github.com/couriard/claude-mods/tree/main/plugins/savvy-progress",
+  "homepage": "https://github.com/couriard/claude-mods/tree/main/plugins/fun-savvy-progress",
   "repository": "https://github.com/couriard/claude-mods",
   "license": "MIT",
   "keywords": [
@@ -35,12 +35,6 @@
       "title": "Open the agents panel at the start of every session",
       "description": "Off keeps it closed until /agents-info",
       "default": true
-    },
-    "taskLink": {
-      "type": "string",
-      "title": "Task Link",
-      "description": "Where a task opens when you click Open Task on its row: a web address with {id} where the task's id goes, for example https://app.clickup.com/t/{id}. Leave empty for no open button.",
-      "default": ""
     },
     "currency": {
       "type": "string",

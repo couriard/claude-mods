@@ -22,6 +22,7 @@ Answer `y` to add the marketplace, pick a scope, and fill in the settings below 
 - **Search** narrows the rows by name or description as you type. The **✕** beside it clears it.
 - **Active Only**: ticked, the rows are what is switched on in this project. Unticked, they are what is switched off here, followed by everything in your skills library that is not installed yet.
 - **A row per skill or gate**: its name, version, "All Projects" when it lives in `~/.claude/skills` (so it applies everywhere), its description, and a **Switch On / Switch Off** link.
+- **Refresh**, top right, reads the library (or, on the Connectors tab, the connectors) again. The library's listing is otherwise kept for fifteen minutes.
 
 ![Active Only unticked: a switched-off skill and one from the library, each with a Switch On link](docs/library.png)
 
