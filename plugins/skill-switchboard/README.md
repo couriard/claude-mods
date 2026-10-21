@@ -36,15 +36,28 @@ The app's switch also becomes the default for new sessions, so the panel records
 
 ## Settings
 
-Claude Code asks for these when you install. All can be left empty and changed later with `/config` → **skill-switchboard**.
+Claude Code asks for these when you install. Both can be left empty and changed later with `/config` → **skill-switchboard**.
 
-| Setting | What to put | Example |
+| Setting | What to put | Default |
 |---|---|---|
-| **Library Folder** | The folder holding your skills library. Empty, the panel works for installed skills and connectors, and shows a note where the library would be. | `~/skills-library` |
-| **Library Server** | Only if that folder is on another computer: the ssh host to reach it (a host name, or an alias from your `~/.ssh/config`). Empty, the folder is on this computer. | `my-server` |
-| **Skills Folder** | The folder inside the library that holds the skills, one folder per skill, each with a `SKILL.md`. Empty when the skills sit directly in the Library Folder. | `Skills` |
+| **Library Location** | Where your skills library lives (see below). Empty, the panel works for installed skills and connectors, and shows a note where the library would be. | Empty |
+| **Skills Folder** | The folder inside the library that holds the skills, one folder per skill, each with a `SKILL.md`. Empty when the skills sit directly in the library. | Empty |
 
-A library on a server is read with ssh and `python3` on that server and copied with `rsync`; ssh must reach it without a password prompt (a key, or your ssh agent). A library on this computer needs `python3` and `rsync` here.
+### Where your library can live
+
+Write the location however your library is kept; the panel works out which kind it is.
+
+| Kind | Write it like | How it is read |
+|---|---|---|
+| A folder on this computer | `~/skills` | Directly. Synced cloud folders (iCloud Drive, Dropbox, OneDrive, Google Drive) and mounted network drives are folders too. |
+| A server you reach over ssh | `my-server:/srv/skills` | Over ssh (a host name or an alias from your `~/.ssh/config`), which must connect without a password prompt. |
+| A GitHub, GitLab or Bitbucket repository | `github:you/skills`, `gitlab:you/skills`, `bitbucket:you/skills`, or the repository's web address | Cloned once into `~/.claude/skill-switchboard/libraries`, then brought up to date whenever you press **Refresh**. |
+| Any other git repository | `https://git.example.com/team/skills.git`, `git@host:team/skills.git` | The same way. |
+| A download | `https://example.com/skills.zip` | Downloaded and unpacked into the same place, and fetched again on **Refresh**. A zip holding one top folder (as a repository's download does) is read from inside it. |
+
+A private repository works wherever this computer's git can already reach it (an ssh key, or `gh auth login` then `gh auth setup-git`). Reading a library needs `python3`, and installing from it `rsync`; a repository needs `git`, a download `curl` and `unzip`. All come with macOS and most Linux systems. The panel only ever reads from your library; it never writes to it.
+
+**Example:** Anthropic's own skills, `github:anthropics/skills` with Skills Folder `skills`.
 
 ## What a switch does
 

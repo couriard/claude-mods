@@ -5,7 +5,7 @@ import type { On } from 'claude-code'
 // switched off, a one-entry personal library, and a vault that answers over a mocked ssh and
 // rsync. Every file call the mod makes is answered from this map, so nothing touches the disk.
 const PROJECT = '/pretend/project'
-const OPTIONS = { libraryServer: 'skills-host', libraryFolder: '/srv/skills library', skillsFolder: 'Skills' }
+const OPTIONS = { libraryLocation: 'skills-host:/srv/skills library', skillsFolder: 'Skills' }
 const HOME = '/pretend/home'
 
 const skillMd = (name: string, category: string, tags: string[]) =>
@@ -63,7 +63,11 @@ const engine = (on: On, files: Map<string, string>, ran: string[][]): Map<string
   })
   on('process.run', async (_$, e) => {
     ran.push([...e.argv])
-    if (e.argv[0] === 'ssh') return { value: { exitCode: 0, stdout: JSON.stringify(VAULT_ROWS), stderr: '' } } as never
+    if (e.argv[0] === 'ssh' || e.argv[0] === 'python3') return { value: { exitCode: 0, stdout: JSON.stringify(VAULT_ROWS), stderr: '' } } as never
+    // A git clone leaves a repository; a download leaves a zip that unpacks to one top folder.
+    if (e.argv[0] === 'git' && e.argv[1] === 'clone') files.set(`${e.argv[e.argv.length - 1]}/.git/HEAD`, 'ref')
+    if (e.argv[0] === 'unzip') files.set(`${e.argv[e.argv.length - 1]}/skills-main/Skills/README.md`, 'x')
+    if (['git', 'curl', 'unzip', 'mkdir'].includes(String(e.argv[0]))) return { value: { exitCode: 0, stdout: '', stderr: '' } } as never
     if (e.argv[0] === 'rsync') {
       // The library's copy arriving.
       const target = String(e.argv[e.argv.length - 1]).replace(/\/$/, '')
@@ -71,7 +75,7 @@ const engine = (on: On, files: Map<string, string>, ran: string[][]): Map<string
       return { value: { exitCode: 0, stdout: '', stderr: '' } } as never
     }
     if (e.argv[0] === 'rm') {
-      const target = String(e.argv[2])
+      const target = String(e.argv[e.argv.length - 1])
       for (const k of [...files.keys()]) if (k.startsWith(target + '/')) files.delete(k)
       return { value: { exitCode: 0, stdout: '', stderr: '' } } as never
     }
@@ -336,3 +340,39 @@ test('without a library: installed skills only, and a note saying how to set one
   expect(ran.some(a => a[0] === 'ssh' || a[0] === 'python3')).toBe(false)
   await pane.unmount()
 })
+
+// Library Location takes every kind of home, worked out from how it is written: a folder here, a
+// git repository (cloned once, pulled again on Refresh) and a download (fetched and unpacked, read
+// from inside its one top folder). Each ends with the library listed and a skill installable.
+for (const [label, location, expectFirst] of [
+  ['a folder here', '~/skills', 'python3'],
+  ['a GitHub repository', 'github:someone/skills', 'git clone --depth 1 https://github.com/someone/skills.git'],
+  ['any git address', 'https://git.example.com/team/skills.git', 'git clone --depth 1 https://git.example.com/team/skills.git'],
+  ['a download', 'https://example.com/skills.zip', 'curl -fsSL'],
+] as const) {
+  test(`Library Location as ${label}`, { options: { libraryLocation: location, skillsFolder: 'Skills' } }, async ($, on) => {
+    const files = seed()
+    const ran: string[][] = []
+    engine(on, files, ran)
+    await $.command.run({ command: 'skill-switchboard', args: '' } as never)
+    const pane = await $.ui.mount({ plugin: 'skill-switchboard', surface: 'desktop', component: 'Pane', requestId: 'skill-switchboard', props: { bodyColumns: 70, title: 'Skill Switchboard' } } as never)
+    await pane.press({ key: 'show-active-fallback' })
+    expect(ran.map(a => a.join(' ')).some(c => c.startsWith(expectFirst))).toBe(true)
+    expect(ran.some(a => a[0] === 'ssh')).toBe(false)
+    expect(await pane.find({ key: 'card-copywriting' })).toBeDefined()
+    await pane.press({ key: 'switch-copywriting' })
+    const rsync = ran.find(a => a[0] === 'rsync')
+    const source = String(rsync?.[rsync.length - 2])
+    if (label === 'a folder here') expect(source).toBe('/pretend/home/skills/Skills/copywriting/')
+    if (label === 'a GitHub repository') expect(source).toMatch(/^\/pretend\/home\/\.claude\/skill-switchboard\/libraries\/[^/]*github\.com-someone-skills\.git\/Skills\/copywriting\/$/)
+    if (label === 'a download') expect(source).toMatch(/\/files\/skills-main\/Skills\/copywriting\/$/)
+    expect(JSON.parse(files.get(`${PROJECT}/.claude/skills/copywriting/.from-vault.json`) ?? '{}').from).toBe(location)
+    // Refresh brings a repository up to date rather than cloning it again.
+    if (label === 'a GitHub repository') {
+      await pane.press({ key: 'refresh-vault' })
+      expect(ran.some(a => a[0] === 'git' && a.includes('pull'))).toBe(true)
+      expect(ran.filter(a => a[0] === 'git' && a[1] === 'clone').length).toBe(1)
+    }
+    await pane.unmount()
+  })
+}

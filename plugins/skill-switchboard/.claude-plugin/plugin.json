@@ -1,7 +1,7 @@
 {
   "name": "skill-switchboard",
-  "version": "1.0.0",
-  "description": "Skill Switchboard: a Claude Code panel for your skills and connectors: Skills and Connectors tabs, a search, an Active Only filter, and a switch on every row. Point it at a skills library (a folder here, or on a server over ssh) to install skills from it with one click.",
+  "version": "1.1.0",
+  "description": "Skill Switchboard: a Claude Code panel for your skills and connectors: Skills and Connectors tabs, a search, an Active Only filter, and a switch on every row. Point it at your skills library (a folder, a server, a git repository or a download) to install skills from it with one click.",
   "author": {
     "name": "couriard",
     "url": "https://github.com/couriard"
@@ -17,16 +17,10 @@
   ],
   "types": "./types/index.d.ts",
   "userConfig": {
-    "libraryFolder": {
+    "libraryLocation": {
       "type": "string",
-      "title": "Library Folder",
-      "description": "The folder holding your skills library, for example ~/skills-library. Leave empty to use the panel without a library.",
-      "default": ""
-    },
-    "libraryServer": {
-      "type": "string",
-      "title": "Library Server",
-      "description": "Only if the library is on another computer: the ssh host to reach it (a host name or an alias from your ssh config). Leave empty for a folder on this computer.",
+      "title": "Library Location",
+      "description": "Where your skills library lives, written any of these ways: a folder (~/skills, or a synced iCloud, Dropbox or OneDrive folder), a server over ssh (my-server:/srv/skills), a git repository (github:you/skills, gitlab:you/skills, or any git address), or a download (https://example.com/skills.zip). Leave empty to use the panel without a library.",
       "default": ""
     },
     "skillsFolder": {

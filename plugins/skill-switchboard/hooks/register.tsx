@@ -17,10 +17,16 @@ import type { Connector, Installed, VaultEntry, View } from '../types'
 const PANE = 'skill-switchboard'
 const COMMAND = 'skill-switchboard'
 
-// Where the skills library is: the person's own settings, read when the module loads (see register).
-// `path` empty means no library is set up, and the panel says how to set one.
-type LibraryConfig = { host: string; path: string; skillsFolder: string }
-let library: LibraryConfig = { host: '', path: '', skillsFolder: '' }
+// Where the skills library is: the Library Location setting, read when the module loads (see
+// register). Empty means no library is set up, and the panel says how to set one. One setting takes
+// every kind of home, worked out from how it is written (see placeOf):
+//   a folder here        ~/skills, /Volumes/Team/skills, a synced iCloud, Dropbox or OneDrive folder
+//   a server over ssh    my-server:/srv/skills (a host or an ssh config alias, a colon, its path)
+//   a git repository     github:owner/repo, gitlab:owner/repo, bitbucket:owner/repo, or any git
+//                        address (https://…, git@…, ssh://…); kept as a local copy, updated by Refresh
+//   a download           https://…/skills.zip, kept unpacked locally, fetched again by Refresh
+type LibraryConfig = { location: string; skillsFolder: string }
+let library: LibraryConfig = { location: '', skillsFolder: '' }
 // The folder inside the library that holds the skills; '.' when they sit in the library folder itself.
 const libraryFolders = (): string[] => [library.skillsFolder || '.']
 
@@ -34,6 +40,71 @@ const remoteEscape = (s: string): string => s.replace(/([^A-Za-z0-9_\/.,:@%+=~-]
 // A path on this computer with a leading ~ made the home folder.
 async function localPath($: EngineInterface, p: string): Promise<string> {
   return p === '~' || p.startsWith('~/') ? `${(await $.env.get('HOME')) ?? ''}${p.slice(1)}` : p
+}
+
+// What a location says, before anything is fetched.
+type Place =
+  | { kind: 'folder'; path: string }
+  | { kind: 'server'; host: string; path: string }
+  | { kind: 'git'; url: string }
+  | { kind: 'download'; url: string }
+
+const GIT_HOSTS: Record<string, string> = { github: 'https://github.com', gitlab: 'https://gitlab.com', bitbucket: 'https://bitbucket.org' }
+
+function placeOf(location: string): Place {
+  const l = location.trim()
+  const short = /^(github|gitlab|bitbucket):([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i.exec(l)
+  if (short) return { kind: 'git', url: `${GIT_HOSTS[(short[1] ?? '').toLowerCase()]}/${short[2]}.git` }
+  if (/^https?:\/\/\S+\.zip(\?\S*)?$/i.test(l)) return { kind: 'download', url: l }
+  if (/^(git@|ssh:\/\/|git:\/\/)\S+$/i.test(l) || /^https?:\/\/\S+\.git\/?$/i.test(l)) return { kind: 'git', url: l }
+  // A web page of a repository on a known host (https://github.com/owner/repo) is its git address.
+  const page = /^https?:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/([^/\s]+\/[^/\s]+?)\/?$/i.exec(l)
+  if (page) return { kind: 'git', url: `https://${page[1]}/${page[2]}.git` }
+  // host:path, with no slash or tilde before the colon (a path on this computer never has one).
+  const server = /^([A-Za-z0-9._@-]+):(.+)$/.exec(l)
+  if (server && !/^[A-Za-z]:[\\/]/.test(l)) return { kind: 'server', host: server[1] ?? '', path: server[2] ?? '' }
+  return { kind: 'folder', path: l }
+}
+
+// Where a git repository or a download is kept on this computer: one folder per location.
+async function cacheDir($: EngineInterface, url: string): Promise<string> {
+  const home = (await $.env.get('HOME')) ?? ''
+  const slug = url.replace(/^[a-z]+:\/\//i, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(-80)
+  return `${home}/.claude/skill-switchboard/libraries/${slug}`
+}
+
+async function run($: EngineInterface, argv: string[], what: string, timeoutMs = 120000): Promise<void> {
+  const { exitCode, stderr } = await $.process.run(argv, { timeoutMs })
+  if (exitCode !== 0) throw new Error(`${what}: ${(stderr || '').trim().split('\n')[0] || 'no reason given'}`)
+}
+
+// The library as a folder the panel can read: on this computer, or on a server over ssh. A git
+// repository is cloned on first use and pulled again when `isFresh` (Refresh); a download is fetched
+// and unpacked the same way. Private repositories work wherever this computer's git can reach them.
+async function whereIs($: EngineInterface, isFresh: boolean): Promise<{ host: string; path: string }> {
+  const place = placeOf(library.location)
+  if (place.kind === 'server') return { host: place.host, path: place.path }
+  if (place.kind === 'folder') return { host: '', path: await localPath($, place.path) }
+  const dir = await cacheDir($, place.url)
+  if (place.kind === 'git') {
+    if (!(await $.fs.exists(`${dir}/.git`))) {
+      await run($, ['git', 'clone', '--depth', '1', place.url, dir], 'the library repository could not be copied')
+    } else if (isFresh) {
+      await run($, ['git', '-C', dir, 'pull', '--ff-only', '--depth', '1'], 'the library repository could not be updated')
+    }
+    return { host: '', path: dir }
+  }
+  // A download: fetched into the folder and unpacked there. A zip holding one top folder (as a
+  // repository's download does) is read from inside it.
+  if (isFresh || !(await $.fs.exists(`${dir}/files`))) {
+    await run($, ['rm', '-rf', dir], 'the old download could not be cleared')
+    await run($, ['mkdir', '-p', `${dir}/files`], 'the download folder could not be made')
+    await run($, ['curl', '-fsSL', '-o', `${dir}/library.zip`, place.url], 'the library could not be downloaded')
+    await run($, ['unzip', '-oq', `${dir}/library.zip`, '-d', `${dir}/files`], 'the library download could not be unpacked')
+  }
+  const inside = (await $.fs.list(`${dir}/files`)).filter(e => !e.name.startsWith('.') && !e.name.startsWith('__MACOSX'))
+  const only = inside.length === 1 && inside[0]?.kind === 'dir' ? inside[0].name : ''
+  return { host: '', path: only ? `${dir}/files/${only}` : `${dir}/files` }
 }
 
 const installed = atom({ plugin: 'skill-switchboard', key: 'installed' } as const, [])
@@ -186,9 +257,9 @@ async function refresh($: EngineInterface): Promise<void> {
 // The library: its listing, read by a small script run here or on the library's server, sent over
 // its own input (so no path is ever quoted into a command line), and kept for fifteen minutes.
 
-const vaultReader = (): string => `
+const vaultReader = (root: string): string => `
 import json, os, re, sys
-ROOT = os.path.expanduser(${JSON.stringify(library.path)})
+ROOT = os.path.expanduser(${JSON.stringify(root)})
 FOLDERS = ${JSON.stringify(libraryFolders())}
 def front(t):
     m = re.match(r'^---\\r?\\n(.*?)\\r?\\n---', t, re.S)
@@ -248,9 +319,10 @@ async function fetchVault($: EngineInterface, isFresh: boolean): Promise<VaultEn
     const cached = (await $.store.get('vault')) as VaultCache | undefined
     if (cached && Array.isArray(cached.list) && now - cached.at < VAULT_STALE_MS) return cached.list
   }
-  if (!library.path) throw new Error(NOT_SET_UP)
-  const argv = library.host ? ['ssh', ...SSH_OPTIONS, library.host, 'python3', '-'] : ['python3', '-']
-  const { exitCode, stdout, stderr } = await $.process.run(argv, { stdin: vaultReader(), timeoutMs: 40000 })
+  if (!library.location) throw new Error(NOT_SET_UP)
+  const at = await whereIs($, isFresh)
+  const argv = at.host ? ['ssh', ...SSH_OPTIONS, at.host, 'python3', '-'] : ['python3', '-']
+  const { exitCode, stdout, stderr } = await $.process.run(argv, { stdin: vaultReader(at.path), timeoutMs: 40000 })
   if (exitCode !== 0) throw new Error(`the library could not be read: ${(stderr || '').trim().split('\n')[0] || 'no reason given'}`)
   const rows = JSON.parse(stdout) as { name: string; folder: string; version: string; description: string; tags: string[]; category: string }[]
   const list: VaultEntry[] = rows
@@ -303,18 +375,19 @@ async function pullFromVault($: EngineInterface, entry: VaultEntry): Promise<voi
   }
   // rsync, by argument vector. On a server the path is escaped for its shell, which would split
   // it at a space otherwise and land the copy somewhere else. --delete keeps the copy exact.
-  const base = library.path.replace(/\/+$/, '')
-  const source = library.host
-    ? `${library.host}:${remoteEscape(`${base}/${entry.folder}/${entry.name}/`)}`
-    : `${await localPath($, `${base}/${entry.folder}/${entry.name}`)}/`
-  const argv = library.host
+  const at = await whereIs($, false)
+  const base = at.path.replace(/\/+$/, '')
+  const source = at.host
+    ? `${at.host}:${remoteEscape(`${base}/${entry.folder}/${entry.name}/`)}`
+    : `${base}/${entry.folder}/${entry.name}/`
+  const argv = at.host
     ? ['rsync', '-a', '--delete', '--exclude', '.git', '-e', `ssh ${SSH_OPTIONS.join(' ')}`, source, `${copy.path}/`]
     : ['rsync', '-a', '--delete', '--exclude', '.git', source, `${copy.path}/`]
   const { exitCode, stderr } = await $.process.run(argv, { timeoutMs: 120000 })
   if (exitCode !== 0) throw new Error(`the library could not be read: ${(stderr || '').trim().split('\n')[0] || 'no reason given'}`)
   if (!(await $.fs.exists(`${copy.path}/SKILL.md`))) throw new Error(`${entry.name} came down without a SKILL.md`)
   const today = new Date(await $.clock.now()).toISOString().slice(0, 10)
-  const receipt = { name: entry.name, folder: entry.folder, version: entry.version, host: library.host || 'local', pulled: today }
+  const receipt = { name: entry.name, folder: entry.folder, version: entry.version, from: library.location, pulled: today }
   await $.fs.write(`${copy.path}/${RECEIPT}`, JSON.stringify(receipt, null, 2) + '\n')
   await setOverride($, project, entry.name, false)
 }
@@ -373,7 +446,7 @@ async function search($: EngineInterface, query: string): Promise<void> {
 // Reads the library's listing (kept fifteen minutes) into state for the drawing.
 async function loadVault($: EngineInterface, isFresh: boolean): Promise<void> {
   if (!isFresh && (await read($, vault)) !== null) return
-  if (!library.path) return
+  if (!library.location) return
   await update($, view, v => ({ ...v, note: 'Reading the library…' }))
   try {
     if (isFresh) await $.store.delete('vault')
@@ -590,16 +663,19 @@ type CardRow = { name: string; version: string; description: string; tag: string
 
 // Shown where the library's rows would be, until a library is set up: how to set one.
 const NOT_SET_UP =
-  'No skills library is set up. To list skills you have not installed yet, point the panel at a folder of skills: ' +
-  'in a terminal, type /config, find skill-switchboard and set Library Folder (and Library Server if the folder is on another computer, reached over ssh).'
+  'No skills library is set up. To list skills you have not installed yet, tell the panel where yours live: ' +
+  'in a terminal, type /config, find skill-switchboard and set Library Location to a folder (~/skills), ' +
+  'a server (my-server:/srv/skills), a git repository (github:you/skills) or a download (https://…/skills.zip).'
 
 const clean = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v.trim() : fallback)
 
 export const register: Register = (on, options) => {
   // The library, from the person's own settings (each a userConfig field in plugin.json).
+  // An older install's Library Folder and Library Server settings still count, as one location.
+  const oldFolder = clean(options.libraryFolder)
+  const oldServer = clean(options.libraryServer)
   library = {
-    host: clean(options.libraryServer),
-    path: clean(options.libraryFolder),
+    location: clean(options.libraryLocation) || (oldFolder ? (oldServer ? `${oldServer}:${oldFolder}` : oldFolder) : ''),
     skillsFolder: clean(options.skillsFolder),
   }
 
@@ -760,7 +836,7 @@ export const register: Register = (on, options) => {
           {v.tab === 'connectors' ? (
             <Button key="refresh-connectors" label="Refresh" plain dimColor onPress={() => void loadConnectors($)} />
           ) : (
-            library.path ? <Button key="refresh-vault" label="Refresh" plain dimColor onPress={() => void loadVault($, true)} /> : null
+            library.location ? <Button key="refresh-vault" label="Refresh" plain dimColor onPress={() => void loadVault($, true)} /> : null
           )}
         </Box>
         {/* Search and Active Only on one line: the search box takes the
@@ -793,7 +869,7 @@ export const register: Register = (on, options) => {
           )}
         </Box>
         <Box key="cards" flexDirection="column">
-          {v.tab !== 'connectors' && !v.showActive && !library.path ? (
+          {v.tab !== 'connectors' && !v.showActive && !library.location ? (
             <Box key="setup">
               <Text dimColor>{NOT_SET_UP}</Text>
             </Box>
