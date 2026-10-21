@@ -1,0 +1,63 @@
+{
+  "name": "savvy-progress",
+  "version": "1.6.0",
+  "description": "A progress bar above the prompt and an agents panel (/agents-info) for sub-agent work: one row per task with its sub-agent, gates and cost, a row per sub-agent with its model, the skills it used and a steady creature of its own, and run health. A fork of johnnyvizz's savvy-progress (MIT), with task rows, gate tracking, open-task links and a currency setting added.",
+  "author": {
+    "name": "johnnyvizz, fork by couriard",
+    "url": "https://github.com/couriard"
+  },
+  "homepage": "https://github.com/couriard/claude-mods/tree/main/plugins/savvy-progress",
+  "repository": "https://github.com/couriard/claude-mods",
+  "license": "MIT",
+  "keywords": [
+    "progress",
+    "agents",
+    "sub-agents",
+    "gates",
+    "panel",
+    "mod"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Panel language",
+      "description": "auto follows Claude Code's language setting, then the system locale",
+      "default": "auto",
+      "options": [
+        "auto",
+        "en",
+        "ru"
+      ]
+    },
+    "autoOpen": {
+      "type": "boolean",
+      "title": "Open the agents panel at the start of every session",
+      "description": "Off keeps it closed until /agents-info",
+      "default": true
+    },
+    "taskLink": {
+      "type": "string",
+      "title": "Task Link",
+      "description": "Where a task opens when you click Open Task on its row: a web address with {id} where the task's id goes, for example https://app.clickup.com/t/{id}. Leave empty for no open button.",
+      "default": ""
+    },
+    "currency": {
+      "type": "string",
+      "title": "Currency",
+      "description": "The currency costs are shown in. They are worked out in US dollars from a built-in price table.",
+      "default": "USD",
+      "options": [
+        "USD",
+        "GBP",
+        "EUR"
+      ]
+    },
+    "exchangeRate": {
+      "type": "string",
+      "title": "Exchange Rate",
+      "description": "How much of your currency one US dollar buys, for example 0.76 for pounds. Ignored for USD.",
+      "default": "1"
+    }
+  }
+}

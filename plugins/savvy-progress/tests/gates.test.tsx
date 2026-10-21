@@ -1,0 +1,196 @@
+import { test, expect, mock } from 'claude-code/testing'
+import type { On } from 'claude-code'
+
+// What the engine would answer beneath the mod: the clock, a finished turn, and no band of its own.
+const engine = (on: On): void => {
+  mock.clock(on)
+  on('turn.complete', async (_$, e) => ({ text: e.answer }))
+  on('ui.render', async ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box key="engine" />
+  })
+  // The mod opens its pane by itself; the test engine takes the request and does nothing.
+  on('ui.open', async () => ({ value: undefined }) as never)
+}
+
+// No gate run and no flow: the band stays out of the way.
+test('nothing shows above the prompt before any gate or flow', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({
+    plugin: 'savvy-progress',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 120 },
+  } as never)
+  expect(await ui.find({ key: 'savvy-gates' })).toBeUndefined()
+  await ui.unmount()
+})
+
+// A gate's verdicts without a reported round: still nothing above the prompt (the old "Checks" band is gone).
+test('gate verdicts alone draw no band above the prompt', async ($, on) => {
+  engine(on)
+  on('agent.spawn', async () => ({ model: 'claude-sonnet-5', agentId: 'gate-1' }))
+  await $.agent.spawn({ tool_use_id: 't1', prompt: 'check TASK-41', description: 'Style gate, basket total', subagentType: 'claude', provider: 'user' } as never)
+  await $.turn.complete({
+    agentId: 'gate-1',
+    answer: 'done\nGATE-RECORD: {"project": "p", "task": "TASK-41", "gate": "gate-style", "verdict": "pass", "reason": "ok"}',
+    durationMs: 10,
+    isAborted: false,
+    turnId: 'turn-1',
+    reason: 'answer',
+  } as never)
+  const ui = await $.ui.mount({
+    plugin: 'savvy-progress',
+    surface: 'desktop',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 120 },
+  } as never)
+  expect(await ui.find({ key: 'savvy-gates' })).toBeUndefined()
+  await ui.unmount()
+})
+
+// A reported round with a task: the band shows the gates counter, and the panel shows the task row
+// with its crew, its gate's verdict and the crew's cost, headed by the task's title.
+test('a reported round shows per-task rows in the panel and the gates counter above the prompt', async ($, on) => {
+  engine(on)
+  on('agent.spawn', async (_$, e) => ({ model: /gate/i.test(e.description) ? 'claude-sonnet-5' : 'claude-opus-5-5', agentId: /gate/i.test(e.description) ? 'gate-2' : 'crew-1' }))
+  on('tool.call', { tool: 'Skill' }, async () => ({ result: 'ok' }) as never)
+  on('tool.call', { tool: 'Read' }, async () => ({ result: 'ok' }) as never)
+  await $.tool.call({
+    tool: 'mcp__savvy-progress__progress',
+    title: 'Release 2.0',
+    phaseLabel: 'Building',
+    tasks: [
+      {
+        title: 'checkout page: the total updates when the basket changes',
+        id: 'TASK-41',
+        crew: 'Crew A',
+        gates: ['gate-style', 'gate-record'],
+        status: 'building',
+      },
+    ],
+    skills: ['task-runner'],
+    health: { heartbeat: true, watchdog: true, slots: '1 of 2' },
+  } as never)
+  await $.agent.spawn({ tool_use_id: 't-crew', prompt: 'work TASK-41 in the shop', description: 'Crew A — basket total', subagentType: 'claude', provider: 'user' } as never)
+  // The crew's skills: one called, one read from its folder.
+  await $.tool.call({ tool: 'Skill', skill: 'frontend-design', agentId: 'crew-1' } as never)
+  await $.tool.call({ tool: 'Read', file_path: '/home/someone/.claude/skills/brand-voice/SKILL.md', agentId: 'crew-1' } as never)
+  await $.turn.complete({
+    agentId: 'crew-1',
+    answer: 'done\nCOST-RECORD: {"project": "p", "task": "checkout page: the total updates when the basket changes", "parent": "Release 2.0"}',
+    durationMs: 10,
+    isAborted: false,
+    turnId: 'turn-c',
+    reason: 'answer',
+  } as never)
+  await $.agent.spawn({ tool_use_id: 't-gate', prompt: 'check TASK-41', description: 'Style gate, basket total', subagentType: 'claude', provider: 'user' } as never)
+  await $.turn.complete({
+    agentId: 'gate-2',
+    answer: 'GATE-RECORD: {"project": "p", "task": "TASK-41", "gate": "gate-style", "verdict": "pass", "reason": "ok"}',
+    durationMs: 10,
+    isAborted: false,
+    turnId: 'turn-g',
+    reason: 'answer',
+  } as never)
+
+  const band = await $.ui.mount({
+    plugin: 'savvy-progress',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: true, maxRows: 3, bodyColumns: 120 },
+  } as never)
+  const gates = await band.find({ key: 'savvy-gates' })
+  expect(gates).toBeDefined()
+  expect(JSON.stringify(gates)).toContain('Gates ✓1 ✗0')
+  await band.unmount()
+
+  const pane = await $.ui.mount({
+    plugin: 'savvy-progress',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'savvy-agents',
+    props: { bodyColumns: 120, title: 'Agents' },
+  } as never)
+  const text = JSON.stringify(await pane.find({ key: 'task-TASK-41' }))
+  expect(text).toContain('Checkout Page: the Total Updates When the Basket Changes')
+  expect(text).toContain('Name: Crew A')
+  expect(text).toContain('✓ Style')
+  expect(text).toContain('○ Record')
+  // No Task Link set: no open button.
+  expect(await pane.find({ key: 'open-TASK-41' })).toBeUndefined()
+  const crewRow = JSON.stringify(await pane.find({ key: 'crew-1' }))
+  expect(crewRow).toContain('Model: Opus 5.5')
+  expect(crewRow).toContain('Task: TASK-41')
+  expect(crewRow).toContain('Skills: Frontend Design, Brand Voice')
+  const gateRow = JSON.stringify(await pane.find({ key: 'gate-2' }))
+  expect(gateRow).toContain('Style Gate: Checkout Page: the Total Updates When the Basket Changes')
+  expect(gateRow).toContain('Gate: Style')
+  expect(gateRow).not.toContain('Name: Style')
+  expect(gateRow).toContain('Skills: None')
+  expect(JSON.stringify(await pane.find({ key: 'chip-0' }))).toContain('Skills: Task Runner')
+  // Costs in US dollars by default.
+  expect(JSON.stringify(await pane.drawn())).toContain('$0.00')
+  await pane.unmount()
+})
+
+// With the Task Link setting, each task row carries an Open Task button that opens the task's own
+// address; statuses read in title case and costs carry the chosen currency.
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`task rows open the task through the Task Link setting (${surface})`, { options: { taskLink: 'https://tracker.example/t/{id}', currency: 'GBP', exchangeRate: '0.5' } }, async ($, on) => {
+    engine(on)
+    const opened: string[] = []
+    on('process.run', async (_$, e) => {
+      opened.push(e.argv.join(' '))
+      return { value: { exitCode: 0, stdout: '', stderr: '' } } as never
+    })
+    on('ui.toast', async () => ({ value: undefined }) as never)
+    await $.tool.call({
+      tool: 'mcp__savvy-progress__progress',
+      title: 'Release 2.0',
+      tasks: [
+        { title: 'basket total', id: 'TASK-41', status: 'to do' },
+        { title: 'delivery dates', id: 'TASK-42', status: 'building' },
+      ],
+    } as never)
+    const pane = await $.ui.mount({
+      plugin: 'savvy-progress',
+      surface,
+      component: 'Pane',
+      requestId: 'savvy-agents',
+      props: { bodyColumns: 120, title: 'Agents' },
+    } as never)
+    expect(JSON.stringify(await pane.find({ key: 'open-TASK-41' }))).toContain('Open Task')
+    await pane.press({ key: 'open-TASK-41' })
+    await pane.press({ key: 'open-TASK-42' })
+    expect(opened[0]).toBe('open https://tracker.example/t/TASK-41')
+    expect(opened[1]).toBe('open https://tracker.example/t/TASK-42')
+    if (surface === 'terminal') {
+      const row = JSON.stringify(await pane.find({ key: 'task-TASK-41' }))
+      expect(row).toContain('To Do')
+      expect(JSON.stringify(await pane.drawn())).toContain('£0.00')
+    }
+    await pane.unmount()
+  })
+}
+
+// A gate named the other way round, "Gate: <kind> check, <what>", reads the same as "<kind> gate, <what>":
+// the word "Gate" appears once in the heading and the grey line names the kind.
+test('a gate named "Gate: design system check" reads Design System Gate, never Gate Gate', async ($, on) => {
+  engine(on)
+  on('agent.spawn', async () => ({ model: 'claude-sonnet-5', agentId: 'gate-3' }))
+  await $.agent.spawn({ tool_use_id: 't3', prompt: 'check it', description: 'Gate: design system check, toolbar spacing', subagentType: 'claude', provider: 'user' } as never)
+  const pane = await $.ui.mount({
+    plugin: 'savvy-progress',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'savvy-agents',
+    props: { bodyColumns: 120, title: 'Agents' },
+  } as never)
+  const row = JSON.stringify(await pane.find({ key: 'gate-3' }))
+  expect(row).toContain('Design System Gate: Toolbar Spacing')
+  expect(row).toContain('Gate: Design System')
+  expect(row).not.toContain('Gate Gate')
+  expect(row).not.toContain('Gate: Gate')
+  await pane.unmount()
+})

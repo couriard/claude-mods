@@ -1,0 +1,37 @@
+{
+  "name": "skills-panel",
+  "version": "1.0.0",
+  "description": "A Claude Code panel for your skills, gates and connectors: Skills, Gates and Connectors tabs, a search, an Active Only filter, and a switch on every row. Point it at a skills library (a folder here, or on a server over ssh) to install skills from it with one click.",
+  "author": { "name": "couriard", "url": "https://github.com/couriard" },
+  "homepage": "https://github.com/couriard/claude-mods/tree/main/plugins/skills-panel",
+  "repository": "https://github.com/couriard/claude-mods",
+  "license": "MIT",
+  "keywords": ["skills", "gates", "connectors", "panel", "mod"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "libraryFolder": {
+      "type": "string",
+      "title": "Library Folder",
+      "description": "The folder holding your skills library, for example ~/skills-library. Leave empty to use the panel without a library.",
+      "default": ""
+    },
+    "libraryServer": {
+      "type": "string",
+      "title": "Library Server",
+      "description": "Only if the library is on another computer: the ssh host to reach it (a host name or an alias from your ssh config). Leave empty for a folder on this computer.",
+      "default": ""
+    },
+    "skillsFolder": {
+      "type": "string",
+      "title": "Skills Folder",
+      "description": "The folder inside the library that holds skills, one folder per skill with a SKILL.md.",
+      "default": "Skills"
+    },
+    "gatesFolder": {
+      "type": "string",
+      "title": "Gates Folder",
+      "description": "The folder inside the library that holds gates (checking skills). Leave empty if your gates live with your skills, tagged skill-type/gate.",
+      "default": "Gates"
+    }
+  }
+}

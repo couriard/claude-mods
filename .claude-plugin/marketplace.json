@@ -1,0 +1,17 @@
+{
+  "name": "claude-mods",
+  "description": "Mods for Claude Code: a panel for skills, gates and connectors, and a progress bar and agents panel for sub-agent work.",
+  "owner": { "name": "couriard", "url": "https://github.com/couriard" },
+  "plugins": [
+    {
+      "name": "skills-panel",
+      "source": "./plugins/skills-panel",
+      "description": "One panel for your skills, gates and connectors, each with a switch, a search, and a one-click install from your own skills library."
+    },
+    {
+      "name": "savvy-progress",
+      "source": "./plugins/savvy-progress",
+      "description": "A progress bar and a live agents panel for sub-agent work: tasks with their crews, gates and costs. A fork of johnnyvizz's savvy-progress."
+    }
+  ]
+}
